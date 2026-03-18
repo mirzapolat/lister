@@ -349,11 +349,13 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
 
       {showSendModal && listId && selectedSmtp && (
         <SendProgressModal
+          campaignId={currentId}
           listId={Number(listId)}
           subject={subject}
           html={htmlForSend}
           text={body}
           smtp={selectedSmtp}
+          rateLimit={selectedProfile?.rate_limit_ms ?? 500}
           onAllSent={handleSendComplete}
           onClose={() => { setShowSendModal(false); onBack(); }}
           tagFilter={tagFilter || undefined}

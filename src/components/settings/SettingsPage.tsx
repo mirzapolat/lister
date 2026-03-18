@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star } from 'lucide-react';
 import {
   getSenderProfiles, createSenderProfile, updateSenderProfile, deleteSenderProfile,
-  senderProfileToSmtp, hasFileSystemApi,
+  senderProfileToSmtp,
 } from '../../db/database';
 import type { SenderProfile } from '../../types';
 import { Button } from '../ui/Button';

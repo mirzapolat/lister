@@ -83,8 +83,6 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
     cancelRef.current = false;
 
     const run = async () => {
-      const rateLimit = getRateLimit();
-
       for (let i = 0; i < contacts.length; i++) {
         if (cancelRef.current) break;
         const contact = contacts[i];
@@ -95,6 +93,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
 
         try {
           await sendOne(smtp, contact, subject, html, text);
+          recordCampaignSend(campaignId, contact.id, 'sent');
           setRecipients((prev) =>
             prev.map((r) => r.contact.id === contact.id ? { ...r, status: 'sent' } : r)
           );
@@ -104,6 +103,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
           if (isBounceError(errorMsg)) {
             addBounce(contact.email, errorMsg);
           }
+          recordCampaignSend(campaignId, contact.id, 'failed', errorMsg);
           setRecipients((prev) =>
             prev.map((r) =>
               r.contact.id === contact.id
@@ -119,6 +119,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
         }
       }
 
+      saveDatabase();
       setDone(true);
       if (!cancelRef.current) onAllSent();
     };

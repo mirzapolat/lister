@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Users, AlertCircle, X } from 'lucide-react';
 import { getLists, createList, updateList, deleteList, getBounces, removeBounce } from '../../db/database';
 import type { List, Bounce } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { Table } from '../ui/Table';
+import { useHotkey } from '../../hooks/useHotkey';
 
 interface ListsPageProps {
   onSelectList: (id: number) => void;
@@ -33,13 +34,15 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
 
   useEffect(() => { refresh(); }, []);
 
-  const openCreate = () => {
+  const openCreate = useCallback(() => {
     setEditingList(null);
     setName('');
     setDescription('');
     setError('');
     setShowModal(true);
-  };
+  }, []);
+
+  useHotkey('n', openCreate, !showModal && !deleteConfirm);
 
   const openEdit = (list: List, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -123,10 +126,13 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Lists</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{lists.length} list{lists.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button variant="primary" onClick={openCreate}>
-          <Plus size={16} />
-          New List
-        </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
+          <Button variant="primary" onClick={openCreate}>
+            <Plus size={16} />
+            New List
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">

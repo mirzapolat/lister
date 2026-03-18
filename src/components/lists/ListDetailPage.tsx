@@ -1,17 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ArrowLeft, Plus, Trash2, Download, Search, X, AlertCircle } from 'lucide-react';
 import {
   getList, getSubscribersForList, removeSubscriberFromList,
   getImportHistory, getAllTags,
   getTagsForSubscriber, setTagsForSubscriber, getBounces, removeBounce,
   updateSubscriber, getLists, getListsForSubscriber, addSubscriberToList, deleteSubscribers,
+  getCampaignSendsForSubscriber,
 } from '../../db/database';
-import type { List, Subscriber, ImportHistory, Bounce } from '../../types';
+import type { List, Subscriber, ImportHistory, Bounce, CampaignSend } from '../../types';
 import { Button } from '../ui/Button';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { MultiSelect } from '../ui/MultiSelect';
 import { ImportModal } from './ImportModal';
+import { useHotkey } from '../../hooks/useHotkey';
 
 // ── Subscriber Edit Modal ─────────────────────────────────────────────────────
 
@@ -32,6 +34,7 @@ function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved, 
   );
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sendHistory] = useState<CampaignSend[]>(() => getCampaignSendsForSubscriber(subscriber.id));
 
   const handleSave = () => {
     try {
@@ -96,6 +99,20 @@ function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved, 
               onChange={(s) => setMemberListIds(s as number[])}
               placeholder="Select lists..."
             />
+          </div>
+        )}
+        {sendHistory.length > 0 && (
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">Send History</label>
+            <div className="max-h-36 overflow-y-auto space-y-1">
+              {sendHistory.map((s) => (
+                <div key={s.id} className="flex items-center justify-between gap-2 text-xs px-2 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700/50">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.status === 'sent' ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <span className="flex-1 truncate text-gray-700 dark:text-gray-300">{s.campaign_name ?? '(deleted campaign)'}</span>
+                  <span className="text-gray-400 whitespace-nowrap">{new Date(s.sent_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {confirmDelete ? (
@@ -170,6 +187,11 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [subscriberTags, setSubscriberTags] = useState<Record<number, string[]>>({});
   const [bounces, setBounces] = useState<Bounce[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const noModal = !showImport && !editingSubscriber && !deleteConfirm;
+  useHotkey('n', useCallback(() => setShowImport(true), []), noModal);
+  useHotkey('/', useCallback(() => { searchRef.current?.focus(); searchRef.current?.select(); }, []), noModal);
 
   const refresh = () => {
     setList(getList(listId));
@@ -316,6 +338,7 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n add · / search</span>
           {selectedIds.length > 0 && (
             <>
               <Button variant="secondary" size="sm" onClick={() => handleExport(false)}>
@@ -365,6 +388,7 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
         <div className="relative w-72">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
+            ref={searchRef}
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

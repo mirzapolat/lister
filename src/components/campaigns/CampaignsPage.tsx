@@ -5,6 +5,7 @@ import type { Campaign } from '../../types';
 import { Button } from '../ui/Button';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
+import { useHotkey } from '../../hooks/useHotkey';
 
 interface CampaignsPageProps {
   onCreateCampaign: () => void;
@@ -25,6 +26,8 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
 
   const refresh = () => setCampaigns(getCampaigns());
   useEffect(() => { refresh(); }, []);
+
+  useHotkey('n', onCreateCampaign, !deleteConfirm);
 
   const filtered = campaigns.filter((c) => filter === 'all' || c.status === filter);
 
@@ -118,10 +121,13 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Campaigns</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{filtered.length} campaign{filtered.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button variant="primary" onClick={onCreateCampaign}>
-          <Plus size={16} />
-          New Campaign
-        </Button>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
+          <Button variant="primary" onClick={onCreateCampaign}>
+            <Plus size={16} />
+            New Campaign
+          </Button>
+        </div>
       </div>
 
       {/* Filter tabs */}
