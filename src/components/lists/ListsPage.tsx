@@ -31,6 +31,8 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
   const [showBounces, setShowBounces] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const refresh = () => {
     setLists(getLists());
@@ -95,6 +97,14 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
     if (!deleteConfirm) return;
     deleteList(deleteConfirm.id);
     setDeleteConfirm(null);
+    setSelectedIds((ids) => ids.filter((id) => id !== deleteConfirm.id));
+    refresh();
+  };
+
+  const handleBulkDelete = () => {
+    selectedIds.forEach((id) => deleteList(id));
+    setSelectedIds([]);
+    setBulkDeleteConfirm(false);
     refresh();
   };
 
@@ -156,6 +166,12 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{lists.length} list{lists.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedIds.length > 0 && (
+            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
+              <Trash2 size={15} />
+              Delete ({selectedIds.length})
+            </Button>
+          )}
           <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
           <Button variant="primary" onClick={openCreate}>
             <Plus size={16} />
@@ -188,6 +204,9 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
           columns={columns}
           data={filtered}
           onRowClick={(row) => onSelectList(row.id)}
+          selectable
+          selectedIds={selectedIds}
+          onSelectChange={setSelectedIds}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
@@ -276,6 +295,19 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
             <Button variant="primary" onClick={handleSave}>
               {editingList ? 'Save Changes' : 'Create List'}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Delete Modal */}
+      <Modal isOpen={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)} title="Delete Lists" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Delete <strong>{selectedIds.length}</strong> list{selectedIds.length !== 1 ? 's' : ''}? This will also delete all contacts in those lists. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleBulkDelete}>Delete {selectedIds.length} Lists</Button>
           </div>
         </div>
       </Modal>

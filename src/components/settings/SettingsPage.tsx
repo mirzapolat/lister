@@ -503,6 +503,8 @@ export function SettingsPage() {
   const [providerDropdown, setProviderDropdown] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<SenderProfile | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [sortKey, setSortKey] = useState<'name' | 'sender_email' | 'smtp_host' | 'is_default'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -539,7 +541,25 @@ export function SettingsPage() {
     if (!deleteConfirm) return;
     deleteSenderProfile(deleteConfirm.id);
     setDeleteConfirm(null);
+    setSelectedIds((ids) => ids.filter((id) => id !== deleteConfirm.id));
     refresh();
+  };
+
+  const handleBulkDelete = () => {
+    selectedIds.forEach((id) => deleteSenderProfile(id));
+    setSelectedIds([]);
+    setBulkDeleteConfirm(false);
+    refresh();
+  };
+
+  const allSelected = filtered.length > 0 && filtered.every((p) => selectedIds.includes(p.id));
+  const someSelected = filtered.some((p) => selectedIds.includes(p.id));
+  const toggleAll = () => {
+    if (allSelected) setSelectedIds((ids) => ids.filter((id) => !filtered.some((p) => p.id === id)));
+    else setSelectedIds((ids) => [...new Set([...ids, ...filtered.map((p) => p.id)])]);
+  };
+  const toggleRow = (id: number) => {
+    setSelectedIds((ids) => ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]);
   };
 
   return (
@@ -553,6 +573,12 @@ export function SettingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
+              <Trash2 size={15} />
+              Delete ({selectedIds.length})
+            </Button>
+          )}
           {/* Email provider dropdown */}
           <div className="relative">
             <button
@@ -617,6 +643,15 @@ export function SettingsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+                <th className="w-10 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                    onChange={toggleAll}
+                    className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                  />
+                </th>
                 {(['name', 'sender_email', 'smtp_host'] as const).map((col, i) => (
                   <th
                     key={col}
@@ -648,10 +683,18 @@ export function SettingsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {filtered.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No profiles match your search.</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">No profiles match your search.</td></tr>
               )}
               {filtered.map((p) => (
-                <tr key={p.id} onClick={() => setEditingProfile(p)} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors group">
+                <tr key={p.id} onClick={() => setEditingProfile(p)} className={`cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors group ${selectedIds.includes(p.id) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}>
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(p.id)}
+                      onChange={() => toggleRow(p.id)}
+                      className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </td>
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{p.name}</td>
                   <td className="px-4 py-3">
                     <div className="text-gray-700 dark:text-gray-300">{p.sender_name || <span className="text-gray-300 dark:text-gray-600">—</span>}</div>
@@ -717,6 +760,19 @@ export function SettingsPage() {
           onSaved={refresh}
         />
       )}
+
+      {/* Bulk Delete Modal */}
+      <Modal isOpen={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)} title="Delete Profiles" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Delete <strong>{selectedIds.length}</strong> sender profile{selectedIds.length !== 1 ? 's' : ''}? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleBulkDelete}>Delete {selectedIds.length} Profiles</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete confirm */}
       <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Delete Profile" size="sm">

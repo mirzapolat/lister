@@ -27,6 +27,8 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
 
   const refresh = () => setCampaigns(getCampaigns());
   useEffect(() => { refresh(); }, []);
@@ -69,6 +71,14 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
     if (!deleteConfirm) return;
     deleteCampaign(deleteConfirm.id);
     setDeleteConfirm(null);
+    setSelectedIds((ids) => ids.filter((id) => id !== deleteConfirm.id));
+    refresh();
+  };
+
+  const handleBulkDelete = () => {
+    selectedIds.forEach((id) => deleteCampaign(id));
+    setSelectedIds([]);
+    setBulkDeleteConfirm(false);
     refresh();
   };
 
@@ -151,6 +161,12 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{filtered.length} campaign{filtered.length !== 1 ? 's' : ''}</p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedIds.length > 0 && (
+            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
+              <Trash2 size={15} />
+              Delete ({selectedIds.length})
+            </Button>
+          )}
           <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
           <Button variant="primary" onClick={onCreateCampaign}>
             <Plus size={16} />
@@ -203,6 +219,9 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
         <Table
           columns={columns}
           data={filtered}
+          selectable
+          selectedIds={selectedIds}
+          onSelectChange={setSelectedIds}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
@@ -224,6 +243,19 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
           }
         />
       </div>
+
+      {/* Bulk Delete Modal */}
+      <Modal isOpen={bulkDeleteConfirm} onClose={() => setBulkDeleteConfirm(false)} title="Delete Campaigns" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Delete <strong>{selectedIds.length}</strong> campaign{selectedIds.length !== 1 ? 's' : ''}? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setBulkDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleBulkDelete}>Delete {selectedIds.length} Campaigns</Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete confirm */}
       <Modal

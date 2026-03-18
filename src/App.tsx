@@ -7,6 +7,7 @@ import {
 } from './db/database';
 import { Layout } from './components/Layout';
 import { LandingPage } from './components/LandingPage';
+import { OnboardingWizard } from './components/OnboardingWizard';
 import { ListsPage } from './components/lists/ListsPage';
 import { ListDetailPage } from './components/lists/ListDetailPage';
 import { CampaignsPage } from './components/campaigns/CampaignsPage';
@@ -16,7 +17,7 @@ import { SubscribersPage } from './components/subscribers/SubscribersPage';
 import { ThemesPage } from './components/themes/ThemesPage';
 import type { Page } from './types';
 
-type AppStatus = 'loading' | 'welcome' | 'ready' | 'error';
+type AppStatus = 'loading' | 'welcome' | 'onboarding' | 'ready' | 'error';
 
 function useDarkMode() {
   const [dark, setDarkState] = useState(() => document.documentElement.classList.contains('dark'));
@@ -143,14 +144,14 @@ export default function App() {
         const result = await createNewDatabaseFallback('lister.sqlite');
         setFileName(result.fileName);
         saveRecentFile(result.fileName);
-        setStatus('ready');
+        setStatus('onboarding');
         return;
       }
       const result = await promptSaveNewFile();
       if (!result) return;
       setFileName(result.fileName);
       saveRecentFile(result.fileName);
-      setStatus('ready');
+      setStatus('onboarding');
     } catch (e) {
       setError(String(e));
       setStatus('error');
@@ -201,6 +202,10 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (status === 'onboarding') {
+    return <OnboardingWizard onComplete={() => setStatus('ready')} />;
   }
 
   if (status === 'welcome') {
