@@ -73,3 +73,29 @@ export interface ContactTag {
   contact_id: number;
   tag: string;
 }
+
+export interface SenderProfile {
+  id: number;
+  name: string;
+  sender_name: string;
+  sender_email: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_username: string;
+  smtp_password: string;
+  smtp_tls: string;
+  is_default: number;
+  rate_limit_ms: number;
+  created_at: string;
+}
+
+export interface CampaignSend {
+  id: number;
+  campaign_id: number | null;
+  campaign_name: string | null;
+  campaign_subject: string | null;
+  subscriber_id: number;
+  sent_at: string;
+  status: 'sent' | 'failed';
+  error: string;
+}

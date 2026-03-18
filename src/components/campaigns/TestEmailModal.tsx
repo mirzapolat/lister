@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { FlaskConical, X } from 'lucide-react';
-import { getSettings } from '../../db/database';
+import type { SmtpSettings } from '../../types';
 import { Button } from '../ui/Button';
 
 interface TestEmailModalProps {
   subject: string;
   html: string;
   text: string;
+  smtp: SmtpSettings;
   defaultEmail: string;
   onClose: () => void;
 }
@@ -20,7 +21,7 @@ function applyTokens(template: string, email: string): string {
     .replace(/\{\{first_name\}\}/g, SAMPLE_CONTACT.first_name);
 }
 
-export function TestEmailModal({ subject, html, text, defaultEmail, onClose }: TestEmailModalProps) {
+export function TestEmailModal({ subject, html, text, smtp, defaultEmail, onClose }: TestEmailModalProps) {
   const [email, setEmail] = useState(defaultEmail);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -30,7 +31,6 @@ export function TestEmailModal({ subject, html, text, defaultEmail, onClose }: T
     setSending(true);
     setResult(null);
     try {
-      const smtp = getSettings();
       const personalizedHtml = applyTokens(html, email);
       const personalizedText = applyTokens(text, email);
       const res = await fetch('http://localhost:3001/api/send', {

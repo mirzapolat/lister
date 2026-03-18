@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Database, FolderOpen, Plus, AlertCircle, Mail, Lock, Zap } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import {
   promptOpenFile, promptSaveNewFile, initSqlJs_,
   hasFileSystemApi, openDatabaseFromFileInput, createNewDatabaseFallback, downloadDatabase,
   getStoredFileHandle, openDatabaseFromFile, clearStoredFileHandle, closeDatabase,
 } from './db/database';
 import { Layout } from './components/Layout';
+import { LandingPage } from './components/LandingPage';
 import { ListsPage } from './components/lists/ListsPage';
 import { ListDetailPage } from './components/lists/ListDetailPage';
 import { CampaignsPage } from './components/campaigns/CampaignsPage';
@@ -166,135 +167,14 @@ export default function App() {
 
   if (status === 'welcome') {
     return (
-      <div className="h-screen flex overflow-hidden bg-white dark:bg-gray-900">
-        {/* Left panel — marketing */}
-        <div className="hidden md:flex md:w-1/2 flex-col justify-between bg-indigo-600 p-12 relative overflow-hidden">
-          {/* Background decoration */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-indigo-500/40" />
-            <div className="absolute -bottom-32 -left-16 w-80 h-80 rounded-full bg-indigo-700/50" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-indigo-500/10" />
-          </div>
-
-          <div className="relative">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-                <Database size={18} className="text-white" />
-              </div>
-              <span className="text-white font-bold text-lg tracking-tight">Lister</span>
-            </div>
-          </div>
-
-          <div className="relative">
-            <h1 className="text-4xl font-bold text-white leading-tight mb-4">
-              Newsletter management,<br />
-              <span className="text-indigo-200">without the cloud.</span>
-            </h1>
-            <p className="text-indigo-200 text-lg mb-10 leading-relaxed">
-              Send campaigns, manage subscribers, and track lists — all stored in a single file on your machine.
-            </p>
-
-            <div className="space-y-5">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center mt-0.5">
-                  <Lock size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">100% local, 100% private</p>
-                  <p className="text-indigo-300 text-sm mt-0.5">Your data never leaves your device. No accounts, no subscriptions, no tracking.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center mt-0.5">
-                  <Mail size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">Send real campaigns</p>
-                  <p className="text-indigo-300 text-sm mt-0.5">Write in Markdown, preview live, send via your own SMTP — full delivery control.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center mt-0.5">
-                  <Zap size={16} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">Lightweight and fast</p>
-                  <p className="text-indigo-300 text-sm mt-0.5">One SQLite file. Import thousands of subscribers in seconds. No bloat.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative">
-            <p className="text-indigo-400 text-xs">Free and open source. Works in any modern browser.</p>
-          </div>
-        </div>
-
-        {/* Right panel — actions */}
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 bg-white dark:bg-gray-900">
-          <div className="w-full max-w-sm">
-            {/* Mobile logo */}
-            <div className="flex md:hidden items-center gap-3 mb-8">
-              <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center">
-                <Database size={18} className="text-white" />
-              </div>
-              <span className="text-gray-900 dark:text-white font-bold text-lg">Lister</span>
-            </div>
-
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Get started</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">Open an existing database or create a new one.</p>
-
-            <div className="space-y-3">
-              <button
-                onClick={handleNewFile}
-                className="w-full flex items-center gap-4 px-5 py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all group"
-              >
-                <div className="flex-shrink-0 w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-                  <Plus size={20} className="text-white" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-white">Create new file</p>
-                  <p className="text-xs text-indigo-300 mt-0.5">Start with an empty database</p>
-                </div>
-              </button>
-
-              <button
-                onClick={handleOpenFile}
-                className="w-full flex items-center gap-4 px-5 py-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-sm transition-all group"
-              >
-                <div className="flex-shrink-0 w-10 h-10 bg-gray-50 dark:bg-gray-700 rounded-lg flex items-center justify-center group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/30 transition-colors">
-                  <FolderOpen size={20} className="text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Open existing file</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Load a .sqlite database file</p>
-                </div>
-              </button>
-            </div>
-
-            {error && (
-              <div className="mt-4 flex items-start gap-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-4 py-3">
-                <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
-                {error}
-              </div>
-            )}
-
-            {!fsApi && (
-              <p className="text-center text-xs text-gray-400 mt-6">
-                Firefox detected — changes are saved in memory. Use the Save button to download your file.
-              </p>
-            )}
-          </div>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".sqlite,.db"
-          className="hidden"
-          onChange={handleFileInputChange}
-        />
-      </div>
+      <LandingPage
+        onOpenFile={handleOpenFile}
+        onNewFile={handleNewFile}
+        error={error}
+        fsApi={fsApi}
+        fileInputRef={fileInputRef}
+        onFileInputChange={handleFileInputChange}
+      />
     );
   }
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, XCircle, X } from 'lucide-react';
-import { getSubscribersForList, getSettings, getSubscribersWithTag, addBounce, getRateLimit } from '../../db/database';
-import type { Subscriber } from '../../types';
+import { getSubscribersForList, getSubscribersWithTag, addBounce, recordCampaignSend, saveDatabase } from '../../db/database';
+import type { Subscriber, SmtpSettings } from '../../types';
 
 interface Recipient {
   contact: Subscriber;
@@ -10,10 +10,13 @@ interface Recipient {
 }
 
 interface SendProgressModalProps {
+  campaignId: number | null;
   listId: number;
   subject: string;
   html: string;
   text: string;
+  smtp: SmtpSettings;
+  rateLimit: number;
   onClose: () => void;
   onAllSent: () => void;
   tagFilter?: string;
@@ -35,7 +38,7 @@ function applyTokens(template: string, contact: Subscriber): string {
 }
 
 async function sendOne(
-  smtp: ReturnType<typeof getSettings>,
+  smtp: SmtpSettings,
   contact: Subscriber,
   subject: string,
   html: string,
@@ -61,7 +64,7 @@ async function sendOne(
   if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
 }
 
-export function SendProgressModal({ listId, subject, html, text, onClose, onAllSent, tagFilter }: SendProgressModalProps) {
+export function SendProgressModal({ campaignId, listId, subject, html, text, smtp, rateLimit, onClose, onAllSent, tagFilter }: SendProgressModalProps) {
   const contacts = tagFilter
     ? getSubscribersWithTag(listId, tagFilter)
     : getSubscribersForList(listId);
@@ -80,7 +83,6 @@ export function SendProgressModal({ listId, subject, html, text, onClose, onAllS
     cancelRef.current = false;
 
     const run = async () => {
-      const smtp = getSettings();
       const rateLimit = getRateLimit();
 
       for (let i = 0; i < contacts.length; i++) {

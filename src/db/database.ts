@@ -1,6 +1,6 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { SCHEMA_SQL, MIGRATION_SQL } from './schema';
-import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber } from '../types';
+import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend } from '../types';
 
 let SQL: SqlJsStatic | null = null;
 let db: Database | null = null;
@@ -767,4 +767,108 @@ export function getSubscribersWithTag(listId: number, tag: string): Subscriber[]
   if (!result.length) return [];
   const [{ columns, values }] = result;
   return rowsToSubscribers(columns, values as (string | number | null)[][]);
+}
+
+// ── Sender Profiles ───────────────────────────────────────────────────────────
+
+function rowsToProfiles(columns: string[], values: (string | number | null)[][]): SenderProfile[] {
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as SenderProfile;
+  });
+}
+
+export function getSenderProfiles(): SenderProfile[] {
+  const result = getDb().exec(`SELECT * FROM sender_profiles ORDER BY is_default DESC, created_at ASC`);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToProfiles(columns, values as (string | number | null)[][]);
+}
+
+export function getSenderProfile(id: number): SenderProfile | null {
+  const result = getDb().exec(`SELECT * FROM sender_profiles WHERE id = ${id}`);
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  return rowsToProfiles(columns, values as (string | number | null)[][])[0];
+}
+
+export function getDefaultSenderProfile(): SenderProfile | null {
+  const result = getDb().exec(`SELECT * FROM sender_profiles ORDER BY is_default DESC, created_at ASC LIMIT 1`);
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  return rowsToProfiles(columns, values as (string | number | null)[][])[0];
+}
+
+export function createSenderProfile(p: Omit<SenderProfile, 'id' | 'created_at'>): number {
+  const database = getDb();
+  if (p.is_default) database.run('UPDATE sender_profiles SET is_default = 0');
+  database.run(
+    'INSERT INTO sender_profiles (name, sender_name, sender_email, smtp_host, smtp_port, smtp_username, smtp_password, smtp_tls, is_default, rate_limit_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 500]
+  );
+  const idResult = database.exec('SELECT last_insert_rowid() as id');
+  const id = idResult[0]?.values[0]?.[0] as number;
+  saveDatabase();
+  return id;
+}
+
+export function updateSenderProfile(id: number, p: Omit<SenderProfile, 'id' | 'created_at'>): void {
+  const database = getDb();
+  if (p.is_default) database.run('UPDATE sender_profiles SET is_default = 0 WHERE id != ?', [id]);
+  database.run(
+    'UPDATE sender_profiles SET name=?, sender_name=?, sender_email=?, smtp_host=?, smtp_port=?, smtp_username=?, smtp_password=?, smtp_tls=?, is_default=?, rate_limit_ms=? WHERE id=?',
+    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 500, id]
+  );
+  saveDatabase();
+}
+
+export function deleteSenderProfile(id: number): void {
+  getDb().run('DELETE FROM sender_profiles WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function senderProfileToSmtp(p: SenderProfile): SmtpSettings {
+  return {
+    smtp_host: p.smtp_host,
+    smtp_port: p.smtp_port,
+    smtp_username: p.smtp_username,
+    smtp_password: p.smtp_password,
+    smtp_tls: p.smtp_tls,
+    sender_name: p.sender_name,
+    sender_email: p.sender_email,
+  };
+}
+
+// ── Campaign send log ─────────────────────────────────────────────────────────
+
+export function recordCampaignSend(
+  campaignId: number | null,
+  subscriberId: number,
+  status: 'sent' | 'failed',
+  error = ''
+): void {
+  getDb().run(
+    'INSERT INTO campaign_sends (campaign_id, subscriber_id, status, error) VALUES (?, ?, ?, ?)',
+    [campaignId, subscriberId, status, error]
+  );
+}
+
+export function getCampaignSendsForSubscriber(subscriberId: number): CampaignSend[] {
+  const result = getDb().exec(`
+    SELECT cs.id, cs.campaign_id, cs.subscriber_id, cs.sent_at, cs.status, cs.error,
+           c.name as campaign_name, c.subject as campaign_subject
+    FROM campaign_sends cs
+    LEFT JOIN campaigns c ON c.id = cs.campaign_id
+    WHERE cs.subscriber_id = ${subscriberId}
+    ORDER BY cs.sent_at DESC
+    LIMIT 100
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as CampaignSend;
+  });
 }

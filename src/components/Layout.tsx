@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { List, Users, Send, Settings, Download, Moon, Sun, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { List, Users, Send, Radio, Download, Moon, Sun, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import type { Page } from '../types';
 
 interface NavItem {
@@ -12,7 +12,7 @@ const navItems: NavItem[] = [
   { id: 'lists', label: 'Lists', icon: <List size={18} /> },
   { id: 'subscribers', label: 'Subscribers', icon: <Users size={18} /> },
   { id: 'campaigns', label: 'Campaigns', icon: <Send size={18} /> },
-  { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
+  { id: 'settings', label: 'Sender Profiles', icon: <Radio size={18} /> },
 ];
 
 const topLevelPages: Page[] = ['lists', 'subscribers', 'campaigns', 'settings'];

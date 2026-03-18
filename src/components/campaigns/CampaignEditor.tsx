@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Save, Send, Eye, EyeOff, FlaskConical } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import { Marked } from 'marked';
-import { getCampaign, createCampaign, updateCampaign, getLists, getSettings, getAllTags } from '../../db/database';
-import type { List, SmtpSettings } from '../../types';
+import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile } from '../../db/database';
+import type { List, SenderProfile } from '../../types';
 import { Button } from '../ui/Button';
 import { SendProgressModal } from './SendProgressModal';
 import { TestEmailModal } from './TestEmailModal';
@@ -82,7 +82,8 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
   const [tagFilter, setTagFilter] = useState<string>('');
   const [lists, setLists] = useState<List[]>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
-  const [settings, setSettings] = useState<SmtpSettings | null>(null);
+  const [senderProfiles, setSenderProfiles] = useState<SenderProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<number | ''>('');
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -93,8 +94,11 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
 
   useEffect(() => {
     setLists(getLists());
-    setSettings(getSettings());
     setAvailableTags(getAllTags());
+    const profiles = getSenderProfiles();
+    setSenderProfiles(profiles);
+    const def = getDefaultSenderProfile();
+    if (def) setSelectedProfileId(def.id);
     if (campaignId) {
       const campaign = getCampaign(campaignId);
       if (campaign) {
@@ -138,6 +142,7 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
   const handleSend = useCallback(() => {
     if (!validate()) return;
     if (!listId) { setErrors((p) => ({ ...p, list: 'Select a list to send to' })); return; }
+    if (!selectedProfileId) { setErrors((p) => ({ ...p, profile: 'Select a sender profile' })); return; }
     // Save first so the campaign exists before sending
     if (currentId) {
       updateCampaign(currentId, name.trim(), subject.trim(), body, Number(listId), 'draft');
@@ -184,7 +189,9 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
     return () => window.removeEventListener('keydown', handler);
   }, [handleSaveDraft, handleSend, listId]);
 
-  const htmlForSend = buildEmailHtml(subject, body, settings?.sender_name ?? '');
+  const selectedProfile = senderProfiles.find((p) => p.id === selectedProfileId) ?? null;
+  const selectedSmtp = selectedProfile ? senderProfileToSmtp(selectedProfile) : null;
+  const htmlForSend = buildEmailHtml(subject, body, selectedProfile?.sender_name ?? '');
 
   return (
     <div className="flex flex-col h-full relative">
@@ -281,6 +288,26 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
                 </select>
               </div>
             )}
+            <div className="flex items-center gap-4">
+              <label className="text-sm font-medium text-gray-600 dark:text-gray-400 w-16 flex-shrink-0">From</label>
+              {senderProfiles.length === 0 ? (
+                <p className="text-sm text-amber-500 dark:text-amber-400">No sender profiles configured — add one in Sender Profiles.</p>
+              ) : (
+                <select
+                  value={selectedProfileId}
+                  onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
+                  className="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                >
+                  <option value="">Select sender profile…</option>
+                  {senderProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.sender_email ? ` — ${p.sender_email}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {errors.profile && <p className="text-xs text-red-500">{errors.profile}</p>}
+            </div>
             {/* Personalization token hint */}
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Available tokens: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{name}}'}</code>{', '}
@@ -307,11 +334,11 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
         {showPreview && (
           <div className="w-1/2 border-l border-gray-200 dark:border-gray-700 flex flex-col bg-gray-100 dark:bg-gray-900">
             <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <p className="text-xs text-gray-500 dark:text-gray-400"><strong>From:</strong> {settings?.sender_name} &lt;{settings?.sender_email}&gt;</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400"><strong>From:</strong> {selectedProfile?.sender_name || '—'} &lt;{selectedProfile?.sender_email || 'no profile selected'}&gt;</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"><strong>Subject:</strong> {subject || '(no subject)'}</p>
             </div>
             <iframe
-              srcDoc={buildEmailHtml(subject || '(no subject)', body, settings?.sender_name ?? '', true)}
+              srcDoc={buildEmailHtml(subject || '(no subject)', body, selectedProfile?.sender_name ?? '', true)}
               className="flex-1 w-full border-none"
               sandbox="allow-same-origin"
               title="Email preview"
@@ -320,24 +347,26 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
         )}
       </div>
 
-      {showSendModal && listId && (
+      {showSendModal && listId && selectedSmtp && (
         <SendProgressModal
           listId={Number(listId)}
           subject={subject}
           html={htmlForSend}
           text={body}
+          smtp={selectedSmtp}
           onAllSent={handleSendComplete}
           onClose={() => { setShowSendModal(false); onBack(); }}
           tagFilter={tagFilter || undefined}
         />
       )}
 
-      {showTestModal && (
+      {showTestModal && selectedSmtp && (
         <TestEmailModal
           subject={subject}
           html={htmlForSend}
           text={body}
-          defaultEmail={settings?.sender_email ?? ''}
+          smtp={selectedSmtp}
+          defaultEmail={selectedProfile?.sender_email ?? ''}
           onClose={() => setShowTestModal(false)}
         />
       )}
