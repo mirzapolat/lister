@@ -1,0 +1,17 @@
+{
+  "name": "Lister — Newsletter Manager",
+  "short_name": "Lister",
+  "description": "Local-first newsletter manager. Manage subscribers, write campaigns, send emails — all data stays on your device.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

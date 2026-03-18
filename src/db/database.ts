@@ -1,0 +1,770 @@
+import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import { SCHEMA_SQL, MIGRATION_SQL } from './schema';
+import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber } from '../types';
+
+let SQL: SqlJsStatic | null = null;
+let db: Database | null = null;
+let fileHandle: FileSystemFileHandle | null = null;
+let fallbackFileName = 'lister.sqlite';
+
+// ── IndexedDB helpers for persisting the file handle across reloads ──
+
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('lister-fsa', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function storeFileHandleInIDB(handle: FileSystemFileHandle): Promise<void> {
+  try {
+    const idb = await openIDB();
+    const tx = idb.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'last');
+    await new Promise<void>((res, rej) => { tx.oncomplete = () => { idb.close(); res(); }; tx.onerror = () => { idb.close(); rej(tx.error); }; });
+  } catch { /* ignore */ }
+}
+
+export async function getStoredFileHandle(): Promise<FileSystemFileHandle | null> {
+  try {
+    const idb = await openIDB();
+    const tx = idb.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('last');
+    return await new Promise<FileSystemFileHandle | null>((res) => { req.onsuccess = () => { idb.close(); res(req.result ?? null); }; req.onerror = () => { idb.close(); res(null); }; });
+  } catch { return null; }
+}
+
+export async function clearStoredFileHandle(): Promise<void> {
+  try {
+    const idb = await openIDB();
+    const tx = idb.transaction('handles', 'readwrite');
+    tx.objectStore('handles').delete('last');
+    await new Promise<void>((res) => { tx.oncomplete = () => { idb.close(); res(); }; tx.onerror = () => { idb.close(); res(); }; });
+  } catch { /* ignore */ }
+}
+
+export function closeDatabase(): void {
+  if (db) { db.close(); db = null; }
+  fileHandle = null;
+}
+
+export function hasFileSystemApi(): boolean {
+  return typeof window !== 'undefined' && 'showOpenFilePicker' in window;
+}
+
+export function getFileName(): string {
+  return fileHandle?.name ?? fallbackFileName;
+}
+
+export async function initSqlJs_(): Promise<SqlJsStatic> {
+  if (SQL) return SQL;
+  SQL = await initSqlJs({
+    locateFile: () => '/sql-wasm.wasm',
+  });
+  return SQL;
+}
+
+export async function createNewDatabase(): Promise<Database> {
+  const sql = await initSqlJs_();
+  db = new sql.Database();
+  db.run(SCHEMA_SQL);
+  db.run(MIGRATION_SQL);
+  return db;
+}
+
+export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promise<Database> {
+  const sql = await initSqlJs_();
+  const file = await handle.getFile();
+  const buffer = await file.arrayBuffer();
+  db = new sql.Database(new Uint8Array(buffer));
+  db.run("PRAGMA foreign_keys = ON;");
+  fileHandle = handle;
+  db.run(SCHEMA_SQL);
+  db.run(MIGRATION_SQL);
+  await storeFileHandleInIDB(handle);
+  return db;
+}
+
+export async function saveDatabase(): Promise<void> {
+  if (!db) return;
+  if (!fileHandle) return; // fallback mode: skip auto-save, user downloads manually
+  const data = db.export();
+  const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/x-sqlite3' });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+}
+
+export async function downloadDatabase(): Promise<void> {
+  if (!db) return;
+  const data = db.export();
+  const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/x-sqlite3' });
+
+  if (hasFileSystemApi()) {
+    try {
+      const handle = await (window as Window).showSaveFilePicker({
+        suggestedName: fallbackFileName,
+        types: [{ description: 'SQLite Database', accept: { 'application/x-sqlite3': ['.sqlite', '.db'] } }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      // fall through to plain download
+    }
+  }
+
+  const chosen = window.prompt('Save as:', fallbackFileName);
+  if (chosen === null) return; // user cancelled
+  const name = chosen.trim() || fallbackFileName;
+  fallbackFileName = name.endsWith('.sqlite') || name.endsWith('.db') ? name : name + '.sqlite';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fallbackFileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function openDatabaseFromFileInput(file: File): Promise<{ db: Database; fileName: string }> {
+  const sql = await initSqlJs_();
+  const buffer = await file.arrayBuffer();
+  db = new sql.Database(new Uint8Array(buffer));
+  db.run("PRAGMA foreign_keys = ON;");
+  db.run(SCHEMA_SQL);
+  db.run(MIGRATION_SQL);
+  fallbackFileName = file.name;
+  fileHandle = null;
+  return { db, fileName: file.name };
+}
+
+export async function createNewDatabaseFallback(name = 'lister.sqlite'): Promise<{ db: Database; fileName: string }> {
+  const newDb = await createNewDatabase();
+  fallbackFileName = name;
+  fileHandle = null;
+  return { db: newDb, fileName: name };
+}
+
+export async function promptOpenFile(): Promise<{ db: Database; fileName: string } | null> {
+  if (!window.showOpenFilePicker) {
+    throw new Error('File System Access API is not supported in this browser. Please use Chrome or Edge.');
+  }
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'SQLite Database', accept: { 'application/x-sqlite3': ['.sqlite', '.db'] } }],
+    });
+    fileHandle = handle;
+    const openedDb = await openDatabaseFromFile(handle);
+    return { db: openedDb, fileName: handle.name };
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') return null;
+    throw e;
+  }
+}
+
+export async function promptSaveNewFile(): Promise<{ db: Database; fileName: string } | null> {
+  if (!window.showSaveFilePicker) {
+    throw new Error('File System Access API is not supported in this browser. Please use Chrome or Edge.');
+  }
+  try {
+    const handle = await window.showSaveFilePicker({
+      suggestedName: 'lister.sqlite',
+      types: [{ description: 'SQLite Database', accept: { 'application/x-sqlite3': ['.sqlite', '.db'] } }],
+    });
+    fileHandle = handle;
+    const newDb = await createNewDatabase();
+    db = newDb;
+    await saveDatabase();
+    return { db: newDb, fileName: handle.name };
+  } catch (e: unknown) {
+    if (e instanceof Error && e.name === 'AbortError') return null;
+    throw e;
+  }
+}
+
+export function getDb(): Database {
+  if (!db) throw new Error('Database not initialized');
+  return db;
+}
+
+// Lists
+
+export function getLists(): List[] {
+  const database = getDb();
+  const result = database.exec(`
+    SELECT l.id, l.name, l.description, l.created_at,
+           COUNT(c.id) as contact_count
+    FROM lists l
+    LEFT JOIN contacts c ON c.list_id = l.id
+    GROUP BY l.id
+    ORDER BY l.created_at DESC
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as List;
+  });
+}
+
+export function getList(id: number): List | null {
+  const database = getDb();
+  const result = database.exec(
+    `SELECT l.id, l.name, l.description, l.created_at, COUNT(c.id) as contact_count
+     FROM lists l LEFT JOIN contacts c ON c.list_id = l.id
+     WHERE l.id = ${id} GROUP BY l.id`
+  );
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  const obj: Record<string, unknown> = {};
+  columns.forEach((col, i) => { obj[col] = values[0][i]; });
+  return obj as unknown as List;
+}
+
+export function createList(name: string, description: string): void {
+  getDb().run('INSERT INTO lists (name, description) VALUES (?, ?)', [name, description]);
+  saveDatabase();
+}
+
+export function updateList(id: number, name: string, description: string): void {
+  getDb().run('UPDATE lists SET name = ?, description = ? WHERE id = ?', [name, description, id]);
+  saveDatabase();
+}
+
+export function deleteList(id: number): void {
+  getDb().run('DELETE FROM lists WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+// Contacts
+
+export function getContacts(listId: number): Contact[] {
+  const result = getDb().exec(
+    `SELECT id, list_id, email, name, created_at FROM contacts WHERE list_id = ${listId} ORDER BY created_at DESC`
+  );
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as Contact;
+  });
+}
+
+export function addContact(listId: number, email: string, name: string): void {
+  getDb().run('INSERT INTO contacts (list_id, email, name) VALUES (?, ?, ?)', [listId, email.trim(), name.trim()]);
+  saveDatabase();
+}
+
+export function addContacts(
+  listId: number,
+  contacts: Array<{ email: string; name: string }>,
+  source = 'import'
+): { added: number; skipped: number } {
+  const database = getDb();
+  let added = 0;
+  let skipped = 0;
+
+  for (const { email, name } of contacts) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) continue;
+
+    // Check if bounced
+    const bouncedResult = database.exec(
+      `SELECT id FROM bounces WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`
+    );
+    if (bouncedResult.length && bouncedResult[0].values.length) {
+      skipped++;
+      continue;
+    }
+
+    // Check if already exists in list
+    const existsResult = database.exec(
+      `SELECT id FROM contacts WHERE list_id = ${listId} AND email = '${trimmedEmail.replace(/'/g, "''")}'`
+    );
+    if (existsResult.length && existsResult[0].values.length) {
+      skipped++;
+      continue;
+    }
+
+    database.run('INSERT INTO contacts (list_id, email, name) VALUES (?, ?, ?)', [listId, trimmedEmail, name.trim()]);
+    added++;
+  }
+
+  // Record import history
+  if (added > 0 || skipped > 0) {
+    database.run(
+      'INSERT INTO import_history (list_id, added_count, skipped_count, source) VALUES (?, ?, ?, ?)',
+      [listId, added, skipped, source]
+    );
+  }
+
+  saveDatabase();
+  return { added, skipped };
+}
+
+export function deleteContacts(ids: number[]): void {
+  if (!ids.length) return;
+  getDb().run(`DELETE FROM contacts WHERE id IN (${ids.join(',')})`);
+  saveDatabase();
+}
+
+// Campaigns
+
+export function getCampaigns(): Campaign[] {
+  const result = getDb().exec(`
+    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.status, c.created_at, c.sent_at,
+           l.name as list_name
+    FROM campaigns c
+    LEFT JOIN lists l ON l.id = c.list_id
+    ORDER BY c.created_at DESC
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as Campaign;
+  });
+}
+
+export function getCampaign(id: number): Campaign | null {
+  const result = getDb().exec(`
+    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.status, c.created_at, c.sent_at,
+           l.name as list_name
+    FROM campaigns c LEFT JOIN lists l ON l.id = c.list_id
+    WHERE c.id = ${id}
+  `);
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  const obj: Record<string, unknown> = {};
+  columns.forEach((col, i) => { obj[col] = values[0][i]; });
+  return obj as unknown as Campaign;
+}
+
+export function createCampaign(
+  name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent'
+): number {
+  getDb().run(
+    'INSERT INTO campaigns (name, subject, body, list_id, status, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [name, subject, body, listId, status, status === 'sent' ? new Date().toISOString() : null]
+  );
+  const result = getDb().exec('SELECT last_insert_rowid() as id');
+  const id = result[0]?.values[0]?.[0] as number;
+  saveDatabase();
+  return id;
+}
+
+export function updateCampaign(
+  id: number, name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent'
+): void {
+  const sentAt = status === 'sent' ? new Date().toISOString() : null;
+  getDb().run(
+    'UPDATE campaigns SET name = ?, subject = ?, body = ?, list_id = ?, status = ?, sent_at = COALESCE(sent_at, ?) WHERE id = ?',
+    [name, subject, body, listId, status, sentAt, id]
+  );
+  saveDatabase();
+}
+
+export function deleteCampaign(id: number): void {
+  getDb().run('DELETE FROM campaigns WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function duplicateCampaign(id: number): number {
+  const campaign = getCampaign(id);
+  if (!campaign) throw new Error('Campaign not found');
+  return createCampaign(
+    campaign.name + ' (Copy)',
+    campaign.subject,
+    campaign.body,
+    campaign.list_id,
+    'draft'
+  );
+}
+
+// Settings
+
+export function getSettings(): SmtpSettings {
+  const result = getDb().exec('SELECT key, value FROM settings');
+  const map: Record<string, string> = {};
+  if (result.length) {
+    result[0].values.forEach(([k, v]) => { map[k as string] = v as string; });
+  }
+  return {
+    smtp_host: map['smtp_host'] ?? '',
+    smtp_port: map['smtp_port'] ?? '587',
+    smtp_username: map['smtp_username'] ?? '',
+    smtp_password: map['smtp_password'] ?? '',
+    smtp_tls: map['smtp_tls'] ?? 'true',
+    sender_name: map['sender_name'] ?? '',
+    sender_email: map['sender_email'] ?? '',
+  };
+}
+
+export function saveSettings(settings: SmtpSettings): void {
+  const database = getDb();
+  Object.entries(settings).forEach(([key, value]) => {
+    database.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
+  });
+  saveDatabase();
+}
+
+// Tags
+
+export function getTagsForContact(contactId: number): string[] {
+  const result = getDb().exec(
+    `SELECT tag FROM contact_tags WHERE contact_id = ${contactId} ORDER BY tag ASC`
+  );
+  if (!result.length) return [];
+  return result[0].values.map((row) => row[0] as string);
+}
+
+export function getAllTags(): string[] {
+  const result = getDb().exec(
+    `SELECT DISTINCT tag FROM subscriber_tags ORDER BY tag ASC`
+  );
+  if (!result.length) return [];
+  return result[0].values.map((row) => row[0] as string);
+}
+
+export function setTagsForContact(contactId: number, tags: string[]): void {
+  const database = getDb();
+  database.run('DELETE FROM contact_tags WHERE contact_id = ?', [contactId]);
+  const unique = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+  for (const tag of unique) {
+    database.run('INSERT INTO contact_tags (contact_id, tag) VALUES (?, ?)', [contactId, tag]);
+  }
+  saveDatabase();
+}
+
+export function getContactsWithTag(listId: number, tag: string): Contact[] {
+  const result = getDb().exec(
+    `SELECT c.id, c.list_id, c.email, c.name, c.created_at
+     FROM contacts c
+     INNER JOIN contact_tags ct ON ct.contact_id = c.id
+     WHERE c.list_id = ${listId} AND ct.tag = '${tag.replace(/'/g, "''")}'
+     ORDER BY c.created_at DESC`
+  );
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as Contact;
+  });
+}
+
+// Import history
+
+export function addImportHistory(listId: number, addedCount: number, skippedCount: number, source: string): void {
+  getDb().run(
+    'INSERT INTO import_history (list_id, added_count, skipped_count, source) VALUES (?, ?, ?, ?)',
+    [listId, addedCount, skippedCount, source]
+  );
+  saveDatabase();
+}
+
+export function getImportHistory(listId: number): ImportHistory[] {
+  const result = getDb().exec(
+    `SELECT id, list_id, added_count, skipped_count, source, created_at
+     FROM import_history WHERE list_id = ${listId} ORDER BY created_at DESC`
+  );
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as ImportHistory;
+  });
+}
+
+// Bounces
+
+export function addBounce(email: string, reason: string): void {
+  getDb().run(
+    'INSERT OR REPLACE INTO bounces (email, reason) VALUES (?, ?)',
+    [email, reason]
+  );
+  saveDatabase();
+}
+
+export function removeBounce(email: string): void {
+  getDb().run('DELETE FROM bounces WHERE email = ?', [email]);
+  saveDatabase();
+}
+
+export function getBounces(): Bounce[] {
+  const result = getDb().exec(
+    `SELECT id, email, reason, created_at FROM bounces ORDER BY created_at DESC`
+  );
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as Bounce;
+  });
+}
+
+export function isEmailBounced(email: string): boolean {
+  const result = getDb().exec(
+    `SELECT id FROM bounces WHERE email = '${email.replace(/'/g, "''")}'`
+  );
+  return result.length > 0 && result[0].values.length > 0;
+}
+
+// Rate limit
+
+export function getRateLimit(): number {
+  const result = getDb().exec(`SELECT value FROM settings WHERE key = 'rate_limit_ms'`);
+  if (!result.length || !result[0].values.length) return 500;
+  const val = Number(result[0].values[0][0]);
+  return isNaN(val) ? 500 : val;
+}
+
+export function setRateLimit(ms: number): void {
+  getDb().run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['rate_limit_ms', String(ms)]);
+  saveDatabase();
+}
+
+// ── Subscribers ──────────────────────────────────────────────────────────────
+
+function rowsToSubscribers(columns: string[], values: (string | number | null)[][]): Subscriber[] {
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as Subscriber;
+  });
+}
+
+export function getAllSubscribers(): Subscriber[] {
+  const result = getDb().exec(`
+    SELECT s.id, s.email, s.name, s.created_at,
+           COUNT(DISTINCT ls.list_id) as list_count,
+           GROUP_CONCAT(DISTINCT st.tag) as tags
+    FROM subscribers s
+    LEFT JOIN list_subscribers ls ON ls.subscriber_id = s.id
+    LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+    GROUP BY s.id
+    ORDER BY s.created_at DESC
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToSubscribers(columns, values as (string | number | null)[][]);
+}
+
+export function getSubscriberById(id: number): Subscriber | null {
+  const result = getDb().exec(`
+    SELECT s.id, s.email, s.name, s.created_at,
+           COUNT(DISTINCT ls.list_id) as list_count,
+           GROUP_CONCAT(DISTINCT st.tag) as tags
+    FROM subscribers s
+    LEFT JOIN list_subscribers ls ON ls.subscriber_id = s.id
+    LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+    WHERE s.id = ${id}
+    GROUP BY s.id
+  `);
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  return rowsToSubscribers(columns, values as (string | number | null)[][])[0];
+}
+
+export function getSubscribersForList(listId: number): Subscriber[] {
+  const result = getDb().exec(`
+    SELECT s.id, s.email, s.name, s.created_at,
+           COUNT(DISTINCT ls2.list_id) as list_count,
+           GROUP_CONCAT(DISTINCT st.tag) as tags
+    FROM subscribers s
+    JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ${listId}
+    LEFT JOIN list_subscribers ls2 ON ls2.subscriber_id = s.id
+    LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+    GROUP BY s.id
+    ORDER BY s.created_at DESC
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToSubscribers(columns, values as (string | number | null)[][]);
+}
+
+export function upsertSubscriber(email: string, name: string): number {
+  const database = getDb();
+  const trimmedEmail = email.trim();
+  database.run('INSERT OR IGNORE INTO subscribers (email, name) VALUES (?, ?)', [trimmedEmail, name.trim()]);
+  const result = database.exec(`SELECT id FROM subscribers WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`);
+  return result[0]?.values[0]?.[0] as number;
+}
+
+export function addSubscriberToList(subscriberId: number, listId: number): void {
+  getDb().run('INSERT OR IGNORE INTO list_subscribers (list_id, subscriber_id) VALUES (?, ?)', [listId, subscriberId]);
+}
+
+export function removeSubscriberFromList(subscriberId: number, listId: number): void {
+  getDb().run('DELETE FROM list_subscribers WHERE subscriber_id = ? AND list_id = ?', [subscriberId, listId]);
+  saveDatabase();
+}
+
+export function deleteSubscriber(id: number): void {
+  getDb().run('DELETE FROM subscribers WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function deleteSubscribers(ids: number[]): void {
+  if (!ids.length) return;
+  getDb().run(`DELETE FROM subscribers WHERE id IN (${ids.join(',')})`);
+  saveDatabase();
+}
+
+export function updateSubscriber(id: number, email: string, name: string): void {
+  getDb().run('UPDATE subscribers SET email = ?, name = ? WHERE id = ?', [email.trim(), name.trim(), id]);
+  saveDatabase();
+}
+
+export function getTagsForSubscriber(id: number): string[] {
+  const result = getDb().exec(
+    `SELECT tag FROM subscriber_tags WHERE subscriber_id = ${id} ORDER BY tag ASC`
+  );
+  if (!result.length) return [];
+  return result[0].values.map((row) => row[0] as string);
+}
+
+export function setTagsForSubscriber(id: number, tags: string[]): void {
+  const database = getDb();
+  database.run('DELETE FROM subscriber_tags WHERE subscriber_id = ?', [id]);
+  const unique = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+  for (const tag of unique) {
+    database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [id, tag]);
+  }
+  saveDatabase();
+}
+
+export function getListsForSubscriber(id: number): List[] {
+  const result = getDb().exec(`
+    SELECT l.id, l.name, l.description, l.created_at,
+           COUNT(ls2.subscriber_id) as contact_count
+    FROM lists l
+    JOIN list_subscribers ls ON ls.list_id = l.id AND ls.subscriber_id = ${id}
+    LEFT JOIN list_subscribers ls2 ON ls2.list_id = l.id
+    GROUP BY l.id
+    ORDER BY l.name ASC
+  `);
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as List;
+  });
+}
+
+export function addSubscribers(
+  listId: number | null,
+  contacts: Array<{ email: string; name: string }>,
+  source = 'import',
+  tags: string[] = [],
+  extraListIds: number[] = []
+): { added: number; skipped: number } {
+  const database = getDb();
+  let added = 0;
+  let skipped = 0;
+
+  const uniqueTags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+  const allListIds = [...(listId !== null ? [listId] : []), ...extraListIds];
+
+  for (const { email, name } of contacts) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) continue;
+
+    // Check if bounced
+    const bouncedResult = database.exec(
+      `SELECT id FROM bounces WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`
+    );
+    if (bouncedResult.length && bouncedResult[0].values.length) {
+      skipped++;
+      continue;
+    }
+
+    // Upsert into subscribers
+    const subscriberId = upsertSubscriber(trimmedEmail, name);
+
+    // Check if already in primary list (dedup metric)
+    if (listId !== null) {
+      const existsResult = database.exec(
+        `SELECT id FROM list_subscribers WHERE list_id = ${listId} AND subscriber_id = ${subscriberId}`
+      );
+      if (existsResult.length && existsResult[0].values.length) {
+        // Still apply tags to already-existing subscribers
+        for (const tag of uniqueTags) {
+          database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [subscriberId, tag]);
+        }
+        skipped++;
+        continue;
+      }
+    }
+
+    // Add to all lists
+    for (const lid of allListIds) {
+      addSubscriberToList(subscriberId, lid);
+    }
+
+    // Apply tags
+    for (const tag of uniqueTags) {
+      database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [subscriberId, tag]);
+    }
+
+    added++;
+  }
+
+  // Record import history for primary list
+  if (listId !== null && (added > 0 || skipped > 0)) {
+    database.run(
+      'INSERT INTO import_history (list_id, added_count, skipped_count, source) VALUES (?, ?, ?, ?)',
+      [listId, added, skipped, source]
+    );
+  }
+
+  saveDatabase();
+  return { added, skipped };
+}
+
+export function addSubscribersToList(subscriberIds: number[], listId: number, tags: string[] = []): { added: number } {
+  const database = getDb();
+  const uniqueTags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+  let added = 0;
+  for (const subscriberId of subscriberIds) {
+    const existsResult = database.exec(
+      `SELECT id FROM list_subscribers WHERE list_id = ${listId} AND subscriber_id = ${subscriberId}`
+    );
+    if (existsResult.length && existsResult[0].values.length) continue;
+    addSubscriberToList(subscriberId, listId);
+    for (const tag of uniqueTags) {
+      database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [subscriberId, tag]);
+    }
+    added++;
+  }
+  saveDatabase();
+  return { added };
+}
+
+export function getSubscribersWithTag(listId: number, tag: string): Subscriber[] {
+  const result = getDb().exec(
+    `SELECT s.id, s.email, s.name, s.created_at,
+            COUNT(DISTINCT ls2.list_id) as list_count,
+            GROUP_CONCAT(DISTINCT st2.tag) as tags
+     FROM subscribers s
+     JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ${listId}
+     JOIN subscriber_tags st ON st.subscriber_id = s.id AND st.tag = '${tag.replace(/'/g, "''")}'
+     LEFT JOIN list_subscribers ls2 ON ls2.subscriber_id = s.id
+     LEFT JOIN subscriber_tags st2 ON st2.subscriber_id = s.id
+     GROUP BY s.id
+     ORDER BY s.created_at DESC`
+  );
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToSubscribers(columns, values as (string | number | null)[][]);
+}
