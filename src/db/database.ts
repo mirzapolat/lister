@@ -82,6 +82,12 @@ export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promis
   db.run("PRAGMA foreign_keys = ON;");
   fileHandle = handle;
   db.run(SCHEMA_SQL);
+  // Add columns that may be missing from older databases
+  const spCols = db.exec("SELECT name FROM pragma_table_info('sender_profiles')");
+  const spColNames = spCols[0]?.values.map((r) => r[0]) ?? [];
+  if (!spColNames.includes('rate_limit_ms')) {
+    db.run('ALTER TABLE sender_profiles ADD COLUMN rate_limit_ms INTEGER NOT NULL DEFAULT 500');
+  }
   db.run(MIGRATION_SQL);
   await storeFileHandleInIDB(handle);
   return db;

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star, Search, X } from 'lucide-react';
 import {
   getSenderProfiles, createSenderProfile, updateSenderProfile, deleteSenderProfile,
   senderProfileToSmtp,
@@ -244,9 +244,20 @@ export function SettingsPage() {
   const [editingProfile, setEditingProfile] = useState<SenderProfile | null | undefined>(undefined);
   // undefined = modal closed, null = creating new, SenderProfile = editing
   const [deleteConfirm, setDeleteConfirm] = useState<SenderProfile | null>(null);
+  const [search, setSearch] = useState('');
 
   const refresh = () => setProfiles(getSenderProfiles());
   useEffect(() => { refresh(); }, []);
+
+  const filtered = useMemo(() => {
+    if (!search) return profiles;
+    const q = search.toLowerCase();
+    return profiles.filter((p) =>
+      p.name.toLowerCase().includes(q) ||
+      p.sender_email.toLowerCase().includes(q) ||
+      p.smtp_host.toLowerCase().includes(q)
+    );
+  }, [profiles, search]);
 
   const handleDelete = () => {
     if (!deleteConfirm) return;
@@ -271,6 +282,25 @@ export function SettingsPage() {
         </Button>
       </div>
 
+      {/* Search */}
+      <div className="mb-4">
+        <div className="relative w-72">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search profiles..."
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Profiles table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm mb-8">
         {profiles.length === 0 ? (
@@ -290,8 +320,11 @@ export function SettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-              {profiles.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors group">
+              {filtered.length === 0 && (
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-400">No profiles match your search.</td></tr>
+              )}
+              {filtered.map((p) => (
+                <tr key={p.id} onClick={() => setEditingProfile(p)} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors group">
                   <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{p.name}</td>
                   <td className="px-4 py-3">
                     <div className="text-gray-700 dark:text-gray-300">{p.sender_name || <span className="text-gray-300 dark:text-gray-600">—</span>}</div>
@@ -314,7 +347,7 @@ export function SettingsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditingProfile(p)}

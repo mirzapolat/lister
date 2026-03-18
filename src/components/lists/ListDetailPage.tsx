@@ -189,9 +189,11 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
   const [bounces, setBounces] = useState<Bounce[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const openImport = useCallback(() => setShowImport(true), []);
+  const focusSearch = useCallback(() => { searchRef.current?.focus(); searchRef.current?.select(); }, []);
   const noModal = !showImport && !editingSubscriber && !deleteConfirm;
-  useHotkey('n', useCallback(() => setShowImport(true), []), noModal);
-  useHotkey('/', useCallback(() => { searchRef.current?.focus(); searchRef.current?.select(); }, []), noModal);
+  useHotkey('n', openImport, noModal);
+  useHotkey('/', focusSearch, noModal);
 
   const refresh = () => {
     setList(getList(listId));

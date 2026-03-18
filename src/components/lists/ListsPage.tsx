@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Users, AlertCircle, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Plus, Pencil, Trash2, Users, AlertCircle, X, Search } from 'lucide-react';
 import { getLists, createList, updateList, deleteList, getBounces, removeBounce } from '../../db/database';
 import type { List, Bounce } from '../../types';
 import { Button } from '../ui/Button';
@@ -18,6 +18,7 @@ function formatDate(dt: string) {
 
 export function ListsPage({ onSelectList }: ListsPageProps) {
   const [lists, setLists] = useState<List[]>([]);
+  const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingList, setEditingList] = useState<List | null>(null);
   const [name, setName] = useState('');
@@ -33,6 +34,12 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  const filtered = useMemo(() => {
+    if (!search) return lists;
+    const q = search.toLowerCase();
+    return lists.filter((l) => l.name.toLowerCase().includes(q) || (l.description ?? '').toLowerCase().includes(q));
+  }, [lists, search]);
 
   const openCreate = useCallback(() => {
     setEditingList(null);
@@ -135,12 +142,31 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
         </div>
       </div>
 
+      {/* Search */}
+      <div className="mb-4">
+        <div className="relative w-72">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search lists..."
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
         <Table
           columns={columns}
-          data={lists}
+          data={filtered}
           onRowClick={(row) => onSelectList(row.id)}
-          emptyMessage="No lists yet. Create your first list to get started."
+          emptyMessage={search ? 'No lists match your search.' : 'No lists yet. Create your first list to get started.'}
         />
       </div>
 

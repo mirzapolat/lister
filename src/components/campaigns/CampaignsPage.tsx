@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Copy, Trash2, Edit2, Send as SendIcon } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Copy, Trash2, Edit2, Send as SendIcon, Search, X } from 'lucide-react';
 import { getCampaigns, deleteCampaign, duplicateCampaign } from '../../db/database';
 import type { Campaign } from '../../types';
 import { Button } from '../ui/Button';
@@ -23,13 +23,21 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<Campaign | null>(null);
+  const [search, setSearch] = useState('');
 
   const refresh = () => setCampaigns(getCampaigns());
   useEffect(() => { refresh(); }, []);
 
   useHotkey('n', onCreateCampaign, !deleteConfirm);
 
-  const filtered = campaigns.filter((c) => filter === 'all' || c.status === filter);
+  const filtered = useMemo(() => {
+    let result = campaigns.filter((c) => filter === 'all' || c.status === filter);
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((c) => c.name.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q));
+    }
+    return result;
+  }, [campaigns, filter, search]);
 
   const handleDuplicate = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -130,6 +138,25 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
         </div>
       </div>
 
+      {/* Search + filter row */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="relative w-72">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search campaigns..."
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter tabs */}
       <div className="flex gap-1 mb-4">
         {filterTabs.map((tab) => (
@@ -166,7 +193,9 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
             }
           }}
           emptyMessage={
-            filter === 'all'
+            search
+              ? 'No campaigns match your search.'
+              : filter === 'all'
               ? 'No campaigns yet. Create your first campaign.'
               : `No ${filter} campaigns.`
           }
