@@ -21,10 +21,14 @@ CREATE TABLE IF NOT EXISTS campaigns (
   subject TEXT NOT NULL,
   body TEXT NOT NULL,
   list_id INTEGER,
+  sender_profile_id INTEGER,
+  theme_id INTEGER,
   status TEXT DEFAULT 'draft',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   sent_at DATETIME,
-  FOREIGN KEY (list_id) REFERENCES lists(id)
+  FOREIGN KEY (list_id) REFERENCES lists(id),
+  FOREIGN KEY (sender_profile_id) REFERENCES sender_profiles(id) ON DELETE SET NULL,
+  FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -93,7 +97,7 @@ CREATE TABLE IF NOT EXISTS sender_profiles (
   smtp_password TEXT NOT NULL DEFAULT '',
   smtp_tls TEXT NOT NULL DEFAULT 'true',
   is_default INTEGER NOT NULL DEFAULT 0,
-  rate_limit_ms INTEGER NOT NULL DEFAULT 500,
+  rate_limit_ms INTEGER NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -106,6 +110,16 @@ CREATE TABLE IF NOT EXISTS campaign_sends (
   error TEXT NOT NULL DEFAULT '',
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL,
   FOREIGN KEY (subscriber_id) REFERENCES subscribers(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS themes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  template_html TEXT NOT NULL DEFAULT '',
+  is_default INTEGER NOT NULL DEFAULT 0,
+  is_builtin INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 PRAGMA foreign_keys = ON;

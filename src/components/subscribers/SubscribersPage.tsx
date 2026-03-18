@@ -180,6 +180,7 @@ export function SubscribersPage() {
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [inlineDeleteId, setInlineDeleteId] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -412,22 +413,42 @@ export function SubscribersPage() {
                       </td>
                       {/* Actions */}
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setEditingSubscriber(subscriber)}
-                            className="p-1.5 rounded text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => { deleteSubscribers([subscriber.id]); refresh(); }}
-                            className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                        {inlineDeleteId === subscriber.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Delete?</span>
+                            <button
+                              onClick={() => setInlineDeleteId(null)}
+                              className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              title="Cancel"
+                            >
+                              <X size={13} />
+                            </button>
+                            <button
+                              onClick={() => { deleteSubscribers([subscriber.id]); setInlineDeleteId(null); refresh(); }}
+                              className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              title="Confirm delete"
+                            >
+                              <Check size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => setEditingSubscriber(subscriber)}
+                              className="p-1.5 rounded text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => setInlineDeleteId(subscriber.id)}
+                              className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );

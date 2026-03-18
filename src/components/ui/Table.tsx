@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 export interface Column<T> {
   key: string;
@@ -80,8 +81,12 @@ export function Table<T>({
               >
                 <span className="flex items-center gap-1">
                   {col.header}
-                  {col.sortable && sortKey === col.key && (
-                    <span className="text-indigo-500">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                  {col.sortable && (
+                    sortKey === col.key
+                      ? sortDir === 'asc'
+                        ? <ChevronUp size={13} className="text-indigo-500" />
+                        : <ChevronDown size={13} className="text-indigo-500" />
+                      : <ChevronUp size={13} className="text-gray-300 dark:text-gray-600" />
                   )}
                 </span>
               </th>

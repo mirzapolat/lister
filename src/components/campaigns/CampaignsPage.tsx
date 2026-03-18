@@ -13,6 +13,7 @@ interface CampaignsPageProps {
 }
 
 type Filter = 'all' | 'draft' | 'sent';
+type SortKey = 'name' | 'subject' | 'list_name' | 'status' | 'date';
 
 function formatDate(dt: string | null) {
   if (!dt) return '—';
@@ -24,11 +25,18 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   const [filter, setFilter] = useState<Filter>('all');
   const [deleteConfirm, setDeleteConfirm] = useState<Campaign | null>(null);
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const refresh = () => setCampaigns(getCampaigns());
   useEffect(() => { refresh(); }, []);
 
   useHotkey('n', onCreateCampaign, !deleteConfirm);
+
+  const handleSort = (key: string) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key as SortKey); setSortDir('asc'); }
+  };
 
   const filtered = useMemo(() => {
     let result = campaigns.filter((c) => filter === 'all' || c.status === filter);
@@ -36,8 +44,19 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
       const q = search.toLowerCase();
       result = result.filter((c) => c.name.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q));
     }
-    return result;
-  }, [campaigns, filter, search]);
+    return [...result].sort((a, b) => {
+      let av: string, bv: string;
+      if (sortKey === 'date') {
+        av = a.sent_at ?? a.created_at ?? '';
+        bv = b.sent_at ?? b.created_at ?? '';
+      } else {
+        av = String(a[sortKey as keyof Campaign] ?? '');
+        bv = String(b[sortKey as keyof Campaign] ?? '');
+      }
+      const cmp = av.localeCompare(bv);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [campaigns, filter, search, sortKey, sortDir]);
 
   const handleDuplicate = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -68,14 +87,16 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
     {
       key: 'name',
       header: 'Campaign',
+      sortable: true,
       render: (row: Campaign) => <span className="font-medium text-gray-900 dark:text-white">{row.name}</span>,
     },
-    { key: 'subject', header: 'Subject', render: (row: Campaign) => <span className="text-gray-500 dark:text-gray-400 truncate max-w-xs block">{row.subject}</span> },
-    { key: 'list_name', header: 'List', render: (row: Campaign) => <span className="text-gray-500 dark:text-gray-400">{row.list_name || '—'}</span> },
-    { key: 'status', header: 'Status', render: (row: Campaign) => statusBadge(row.status) },
+    { key: 'subject', header: 'Subject', sortable: true, render: (row: Campaign) => <span className="text-gray-500 dark:text-gray-400 truncate max-w-xs block">{row.subject}</span> },
+    { key: 'list_name', header: 'List', sortable: true, render: (row: Campaign) => <span className="text-gray-500 dark:text-gray-400">{row.list_name || '—'}</span> },
+    { key: 'status', header: 'Status', sortable: true, render: (row: Campaign) => statusBadge(row.status) },
     {
       key: 'date',
       header: 'Date',
+      sortable: true,
       render: (row: Campaign) => (
         <span className="text-gray-400 text-xs">
           {row.status === 'sent' ? formatDate(row.sent_at) : formatDate(row.created_at)}
@@ -138,9 +159,9 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
         </div>
       </div>
 
-      {/* Search + filter row */}
-      <div className="flex items-center gap-4 mb-4">
-        <div className="relative w-72">
+      {/* Search + filter tabs row */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative w-64 flex-shrink-0">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -155,10 +176,8 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
             </button>
           )}
         </div>
-      </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-1 mb-4">
+        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+        <div className="flex gap-1">
         {filterTabs.map((tab) => (
           <button
             key={tab.id}
@@ -177,12 +196,16 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
             </span>
           </button>
         ))}
+        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
         <Table
           columns={columns}
           data={filtered}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           onRowClick={(row) => {
             if (row.status === 'sent') {
               const newId = duplicateCampaign(row.id);

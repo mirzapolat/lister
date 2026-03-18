@@ -1,6 +1,7 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { SCHEMA_SQL, MIGRATION_SQL } from './schema';
-import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend } from '../types';
+import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend, EmailTheme } from '../types';
+import { BUILTIN_THEMES } from '../themes/builtinThemes';
 
 let SQL: SqlJsStatic | null = null;
 let db: Database | null = null;
@@ -71,6 +72,7 @@ export async function createNewDatabase(): Promise<Database> {
   db = new sql.Database();
   db.run(SCHEMA_SQL);
   db.run(MIGRATION_SQL);
+  seedBuiltinThemes();
   return db;
 }
 
@@ -86,9 +88,18 @@ export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promis
   const spCols = db.exec("SELECT name FROM pragma_table_info('sender_profiles')");
   const spColNames = spCols[0]?.values.map((r) => r[0]) ?? [];
   if (!spColNames.includes('rate_limit_ms')) {
-    db.run('ALTER TABLE sender_profiles ADD COLUMN rate_limit_ms INTEGER NOT NULL DEFAULT 500');
+    db.run('ALTER TABLE sender_profiles ADD COLUMN rate_limit_ms INTEGER NOT NULL DEFAULT 0');
+  }
+  const cCols = db.exec("SELECT name FROM pragma_table_info('campaigns')");
+  const cColNames = cCols[0]?.values.map((r) => r[0]) ?? [];
+  if (!cColNames.includes('sender_profile_id')) {
+    db.run('ALTER TABLE campaigns ADD COLUMN sender_profile_id INTEGER');
+  }
+  if (!cColNames.includes('theme_id')) {
+    db.run('ALTER TABLE campaigns ADD COLUMN theme_id INTEGER');
   }
   db.run(MIGRATION_SQL);
+  seedBuiltinThemes();
   await storeFileHandleInIDB(handle);
   return db;
 }
@@ -324,8 +335,8 @@ export function deleteContacts(ids: number[]): void {
 
 export function getCampaigns(): Campaign[] {
   const result = getDb().exec(`
-    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.status, c.created_at, c.sent_at,
-           l.name as list_name
+    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.sender_profile_id, c.theme_id,
+           c.status, c.created_at, c.sent_at, l.name as list_name
     FROM campaigns c
     LEFT JOIN lists l ON l.id = c.list_id
     ORDER BY c.created_at DESC
@@ -341,8 +352,8 @@ export function getCampaigns(): Campaign[] {
 
 export function getCampaign(id: number): Campaign | null {
   const result = getDb().exec(`
-    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.status, c.created_at, c.sent_at,
-           l.name as list_name
+    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.sender_profile_id, c.theme_id,
+           c.status, c.created_at, c.sent_at, l.name as list_name
     FROM campaigns c LEFT JOIN lists l ON l.id = c.list_id
     WHERE c.id = ${id}
   `);
@@ -354,11 +365,12 @@ export function getCampaign(id: number): Campaign | null {
 }
 
 export function createCampaign(
-  name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent'
+  name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent',
+  senderProfileId?: number | null, themeId?: number | null,
 ): number {
   getDb().run(
-    'INSERT INTO campaigns (name, subject, body, list_id, status, sent_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [name, subject, body, listId, status, status === 'sent' ? new Date().toISOString() : null]
+    'INSERT INTO campaigns (name, subject, body, list_id, sender_profile_id, theme_id, status, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [name, subject, body, listId, senderProfileId ?? null, themeId ?? null, status, status === 'sent' ? new Date().toISOString() : null]
   );
   const result = getDb().exec('SELECT last_insert_rowid() as id');
   const id = result[0]?.values[0]?.[0] as number;
@@ -367,12 +379,13 @@ export function createCampaign(
 }
 
 export function updateCampaign(
-  id: number, name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent'
+  id: number, name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent',
+  senderProfileId?: number | null, themeId?: number | null,
 ): void {
   const sentAt = status === 'sent' ? new Date().toISOString() : null;
   getDb().run(
-    'UPDATE campaigns SET name = ?, subject = ?, body = ?, list_id = ?, status = ?, sent_at = COALESCE(sent_at, ?) WHERE id = ?',
-    [name, subject, body, listId, status, sentAt, id]
+    'UPDATE campaigns SET name = ?, subject = ?, body = ?, list_id = ?, sender_profile_id = ?, theme_id = ?, status = ?, sent_at = COALESCE(sent_at, ?) WHERE id = ?',
+    [name, subject, body, listId, senderProfileId ?? null, themeId ?? null, status, sentAt, id]
   );
   saveDatabase();
 }
@@ -390,7 +403,9 @@ export function duplicateCampaign(id: number): number {
     campaign.subject,
     campaign.body,
     campaign.list_id,
-    'draft'
+    'draft',
+    campaign.sender_profile_id,
+    campaign.theme_id,
   );
 }
 
@@ -811,7 +826,7 @@ export function createSenderProfile(p: Omit<SenderProfile, 'id' | 'created_at'>)
   if (p.is_default) database.run('UPDATE sender_profiles SET is_default = 0');
   database.run(
     'INSERT INTO sender_profiles (name, sender_name, sender_email, smtp_host, smtp_port, smtp_username, smtp_password, smtp_tls, is_default, rate_limit_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 500]
+    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 0]
   );
   const idResult = database.exec('SELECT last_insert_rowid() as id');
   const id = idResult[0]?.values[0]?.[0] as number;
@@ -824,7 +839,7 @@ export function updateSenderProfile(id: number, p: Omit<SenderProfile, 'id' | 'c
   if (p.is_default) database.run('UPDATE sender_profiles SET is_default = 0 WHERE id != ?', [id]);
   database.run(
     'UPDATE sender_profiles SET name=?, sender_name=?, sender_email=?, smtp_host=?, smtp_port=?, smtp_username=?, smtp_password=?, smtp_tls=?, is_default=?, rate_limit_ms=? WHERE id=?',
-    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 500, id]
+    [p.name, p.sender_name, p.sender_email, p.smtp_host, p.smtp_port, p.smtp_username, p.smtp_password, p.smtp_tls, p.is_default, p.rate_limit_ms ?? 0, id]
   );
   saveDatabase();
 }
@@ -877,4 +892,98 @@ export function getCampaignSendsForSubscriber(subscriberId: number): CampaignSen
     columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as CampaignSend;
   });
+}
+
+// ── Themes ──────────────────────────────────────────────────────────────────
+
+function rowsToThemes(columns: string[], values: (string | number | null)[][]): EmailTheme[] {
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as EmailTheme;
+  });
+}
+
+export function getThemes(): EmailTheme[] {
+  const result = getDb().exec('SELECT * FROM themes ORDER BY is_builtin DESC, is_default DESC, created_at ASC');
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToThemes(columns, values as (string | number | null)[][]);
+}
+
+export function getDefaultTheme(): EmailTheme | null {
+  const result = getDb().exec('SELECT * FROM themes ORDER BY is_default DESC, is_builtin DESC, created_at ASC LIMIT 1');
+  if (!result.length || !result[0].values.length) return null;
+  const { columns, values } = result[0];
+  return rowsToThemes(columns, values as (string | number | null)[][])[0];
+}
+
+export function createTheme(t: Omit<EmailTheme, 'id' | 'created_at'>): number {
+  const database = getDb();
+  if (t.is_default) database.run('UPDATE themes SET is_default = 0');
+  database.run(
+    'INSERT INTO themes (name, description, template_html, is_default, is_builtin) VALUES (?, ?, ?, ?, ?)',
+    [t.name, t.description, t.template_html, t.is_default, t.is_builtin]
+  );
+  const id = database.exec('SELECT last_insert_rowid() as id')[0]?.values[0]?.[0] as number;
+  saveDatabase();
+  return id;
+}
+
+export function updateTheme(id: number, t: Omit<EmailTheme, 'id' | 'created_at'>): void {
+  const database = getDb();
+  if (t.is_default) database.run('UPDATE themes SET is_default = 0 WHERE id != ?', [id]);
+  database.run(
+    'UPDATE themes SET name=?, description=?, template_html=?, is_default=?, is_builtin=? WHERE id=?',
+    [t.name, t.description, t.template_html, t.is_default, t.is_builtin, id]
+  );
+  saveDatabase();
+}
+
+export function deleteTheme(id: number): void {
+  getDb().run('DELETE FROM themes WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function setDefaultTheme(id: number): void {
+  const database = getDb();
+  database.run('UPDATE themes SET is_default = 0');
+  database.run('UPDATE themes SET is_default = 1 WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function seedBuiltinThemes(): void {
+  const database = getDb();
+  for (let i = 0; i < BUILTIN_THEMES.length; i++) {
+    const t = BUILTIN_THEMES[i];
+    const exists = database.exec(
+      `SELECT id FROM themes WHERE name = '${t.name.replace(/'/g, "''")}' AND is_builtin = 1`
+    );
+    if (!exists.length || !exists[0].values.length) {
+      database.run(
+        'INSERT INTO themes (name, description, template_html, is_default, is_builtin) VALUES (?, ?, ?, ?, 1)',
+        [t.name, t.description, t.template_html, i === 0 ? 1 : 0]
+      );
+    } else {
+      // Keep template up to date when built-in themes change
+      database.run(
+        'UPDATE themes SET template_html = ?, description = ? WHERE name = ? AND is_builtin = 1',
+        [t.template_html, t.description, t.name]
+      );
+    }
+  }
+  // Migration: transfer default from 'Clean' to 'Clean (No Footer)' if user hasn't set a custom default
+  const noFooterRow = database.exec(
+    "SELECT id, is_default FROM themes WHERE name = 'Clean (No Footer)' AND is_builtin = 1"
+  );
+  const cleanRow = database.exec(
+    "SELECT is_default FROM themes WHERE name = 'Clean' AND is_builtin = 1"
+  );
+  const noFooterId = noFooterRow[0]?.values[0]?.[0] as number | undefined;
+  const noFooterIsDefault = noFooterRow[0]?.values[0]?.[1] as number | undefined;
+  const cleanIsDefault = cleanRow[0]?.values[0]?.[0] as number | undefined;
+  if (noFooterId && !noFooterIsDefault && cleanIsDefault === 1) {
+    database.run('UPDATE themes SET is_default = 0 WHERE name = ? AND is_builtin = 1', ['Clean']);
+    database.run('UPDATE themes SET is_default = 1 WHERE id = ?', [noFooterId]);
+  }
 }

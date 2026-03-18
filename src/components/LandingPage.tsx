@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, FolderOpen, Plus, AlertCircle, Mail, Lock, Zap } from 'lucide-react';
+import { Database, FolderOpen, Plus, AlertCircle, Mail, Lock, Zap, Clock } from 'lucide-react';
 import { Modal } from './ui/Modal';
 
 // ── Privacy Policy ────────────────────────────────────────────────────────────
@@ -190,13 +190,15 @@ function Imprint() {
 interface LandingPageProps {
   onOpenFile: () => void;
   onNewFile: () => void;
+  onOpenRecent?: () => void;
+  recentFileName?: string;
   error: string;
   fsApi: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
-export function LandingPage({ onOpenFile, onNewFile, error, fsApi, fileInputRef, onFileInputChange }: LandingPageProps) {
+export function LandingPage({ onOpenFile, onNewFile, onOpenRecent, recentFileName, error, fsApi, fileInputRef, onFileInputChange }: LandingPageProps) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showImprint, setShowImprint] = useState(false);
 
@@ -304,6 +306,16 @@ export function LandingPage({ onOpenFile, onNewFile, error, fsApi, fileInputRef,
                   <p className="text-xs text-gray-400 mt-0.5">Load a .sqlite database file</p>
                 </div>
               </button>
+
+              {onOpenRecent && recentFileName && (
+                <button
+                  onClick={onOpenRecent}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  <Clock size={15} className="flex-shrink-0 text-gray-400" />
+                  <span>Or continue with <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{recentFileName}</span></span>
+                </button>
+              )}
             </div>
 
             {error && (

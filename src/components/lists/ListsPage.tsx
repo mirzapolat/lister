@@ -16,6 +16,8 @@ function formatDate(dt: string) {
   return new Date(dt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+type SortKey = 'name' | 'description' | 'contact_count' | 'created_at';
+
 export function ListsPage({ onSelectList }: ListsPageProps) {
   const [lists, setLists] = useState<List[]>([]);
   const [search, setSearch] = useState('');
@@ -27,6 +29,8 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
   const [error, setError] = useState('');
   const [bounces, setBounces] = useState<Bounce[]>([]);
   const [showBounces, setShowBounces] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const refresh = () => {
     setLists(getLists());
@@ -35,11 +39,27 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
 
   useEffect(() => { refresh(); }, []);
 
+  const handleSort = (key: string) => {
+    if (key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key as SortKey); setSortDir('asc'); }
+  };
+
   const filtered = useMemo(() => {
-    if (!search) return lists;
-    const q = search.toLowerCase();
-    return lists.filter((l) => l.name.toLowerCase().includes(q) || (l.description ?? '').toLowerCase().includes(q));
-  }, [lists, search]);
+    let result = lists;
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((l) => l.name.toLowerCase().includes(q) || (l.description ?? '').toLowerCase().includes(q));
+    }
+    return [...result].sort((a, b) => {
+      if (sortKey === 'contact_count') {
+        const av = a.contact_count ?? 0, bv = b.contact_count ?? 0;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+      const av = String(a[sortKey] ?? ''), bv = String(b[sortKey] ?? '');
+      const cmp = av.localeCompare(bv);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [lists, search, sortKey, sortDir]);
 
   const openCreate = useCallback(() => {
     setEditingList(null);
@@ -87,6 +107,7 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
     {
       key: 'name',
       header: 'Name',
+      sortable: true,
       render: (row: List) => (
         <span className="font-medium text-gray-900 dark:text-white">{row.name}</span>
       ),
@@ -95,6 +116,7 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
     {
       key: 'contact_count',
       header: 'Contacts',
+      sortable: true,
       render: (row: List) => (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400">
           <Users size={11} />
@@ -102,7 +124,7 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
         </span>
       ),
     },
-    { key: 'created_at', header: 'Created', render: (row: List) => <span className="text-gray-500 dark:text-gray-400">{formatDate(row.created_at)}</span> },
+    { key: 'created_at', header: 'Created', sortable: true, render: (row: List) => <span className="text-gray-500 dark:text-gray-400">{formatDate(row.created_at)}</span> },
     {
       key: 'actions',
       header: '',
@@ -166,6 +188,9 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
           columns={columns}
           data={filtered}
           onRowClick={(row) => onSelectList(row.id)}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={handleSort}
           emptyMessage={search ? 'No lists match your search.' : 'No lists yet. Create your first list to get started.'}
         />
       </div>

@@ -20,6 +20,8 @@ export interface Campaign {
   subject: string;
   body: string;
   list_id: number | null;
+  sender_profile_id: number | null;
+  theme_id: number | null;
   status: 'draft' | 'sent';
   created_at: string;
   sent_at: string | null;
@@ -45,7 +47,7 @@ export interface Subscriber {
   tags?: string; // comma-joined
 }
 
-export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'subscribers';
+export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'subscribers' | 'themes';
 
 export interface AppState {
   currentPage: Page;
@@ -98,4 +100,14 @@ export interface CampaignSend {
   sent_at: string;
   status: 'sent' | 'failed';
   error: string;
+}
+
+export interface EmailTheme {
+  id: number;
+  name: string;
+  description: string;
+  template_html: string;
+  is_default: number;
+  is_builtin: number;
+  created_at: string;
 }

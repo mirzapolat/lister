@@ -3,7 +3,7 @@ import { AlertCircle } from 'lucide-react';
 import {
   promptOpenFile, promptSaveNewFile, initSqlJs_,
   hasFileSystemApi, openDatabaseFromFileInput, createNewDatabaseFallback, downloadDatabase,
-  getStoredFileHandle, openDatabaseFromFile, clearStoredFileHandle, closeDatabase,
+  getStoredFileHandle, openDatabaseFromFile, closeDatabase,
 } from './db/database';
 import { Layout } from './components/Layout';
 import { LandingPage } from './components/LandingPage';
@@ -13,6 +13,7 @@ import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { CampaignEditor } from './components/campaigns/CampaignEditor';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { SubscribersPage } from './components/subscribers/SubscribersPage';
+import { ThemesPage } from './components/themes/ThemesPage';
 import type { Page } from './types';
 
 type AppStatus = 'loading' | 'welcome' | 'ready' | 'error';
@@ -37,11 +38,17 @@ export default function App() {
   const [dark, setDark] = useDarkMode();
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
+  const [recentFileName, setRecentFileName] = useState(() => localStorage.getItem('lister-recent-filename') ?? '');
   const [page, setPage] = useState<Page>('lists');
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsApi = hasFileSystemApi();
+
+  const saveRecentFile = (name: string) => {
+    localStorage.setItem('lister-recent-filename', name);
+    setRecentFileName(name);
+  };
 
   useEffect(() => {
     initSqlJs_().then(async () => {
@@ -57,6 +64,7 @@ export default function App() {
             if (granted === 'granted') {
               await openDatabaseFromFile(handle);
               setFileName(handle.name);
+              saveRecentFile(handle.name);
               setStatus('ready');
               return;
             }
@@ -77,10 +85,38 @@ export default function App() {
       const result = await promptOpenFile();
       if (!result) return;
       setFileName(result.fileName);
+      saveRecentFile(result.fileName);
       setStatus('ready');
     } catch (e) {
       setError(String(e));
       setStatus('error');
+    }
+  };
+
+  const handleOpenRecent = async () => {
+    try {
+      setError('');
+      const handle = await getStoredFileHandle();
+      if (handle) {
+        const h = handle as unknown as { queryPermission(o: object): Promise<string>; requestPermission(o: object): Promise<string> };
+        const perm = await h.queryPermission({ mode: 'readwrite' });
+        const granted = perm === 'granted'
+          ? 'granted'
+          : await h.requestPermission({ mode: 'readwrite' });
+        if (granted === 'granted') {
+          await openDatabaseFromFile(handle);
+          setFileName(handle.name);
+          saveRecentFile(handle.name);
+          setStatus('ready');
+          return;
+        }
+        setError('Permission denied — please open the file manually.');
+      } else {
+        // Handle was cleared (e.g. after unload); fall back to file picker
+        handleOpenFile();
+      }
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -91,6 +127,7 @@ export default function App() {
       setError('');
       const result = await openDatabaseFromFileInput(file);
       setFileName(result.fileName);
+      saveRecentFile(result.fileName);
       setStatus('ready');
     } catch (e) {
       setError(String(e));
@@ -105,12 +142,14 @@ export default function App() {
       if (!fsApi) {
         const result = await createNewDatabaseFallback('lister.sqlite');
         setFileName(result.fileName);
+        saveRecentFile(result.fileName);
         setStatus('ready');
         return;
       }
       const result = await promptSaveNewFile();
       if (!result) return;
       setFileName(result.fileName);
+      saveRecentFile(result.fileName);
       setStatus('ready');
     } catch (e) {
       setError(String(e));
@@ -122,7 +161,6 @@ export default function App() {
 
   const handleUnload = async () => {
     closeDatabase();
-    await clearStoredFileHandle();
     setStatus('welcome');
     setFileName('');
     setPage('lists');
@@ -170,6 +208,8 @@ export default function App() {
       <LandingPage
         onOpenFile={handleOpenFile}
         onNewFile={handleNewFile}
+        onOpenRecent={recentFileName && fsApi ? handleOpenRecent : undefined}
+        recentFileName={recentFileName}
         error={error}
         fsApi={fsApi}
         fileInputRef={fileInputRef}
@@ -220,6 +260,8 @@ export default function App() {
         );
       case 'subscribers':
         return <SubscribersPage />;
+      case 'themes':
+        return <ThemesPage />;
       case 'settings':
         return <SettingsPage />;
       default:

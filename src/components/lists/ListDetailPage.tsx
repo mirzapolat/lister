@@ -364,30 +364,9 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
         </div>
       </div>
 
-      {/* Tag filter bar */}
-      {allTags.length > 0 && (
-        <div className="mb-4 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Filter by tag:</span>
-          {allTags.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                activeTag === tag
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
-              }`}
-            >
-              {tag}
-              {activeTag === tag && <X size={10} />}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative w-72">
+      {/* Search + tag filter row */}
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
+        <div className="relative w-64 flex-shrink-0">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             ref={searchRef}
@@ -395,19 +374,41 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search subscribers..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400"
+            className="w-full pl-9 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white dark:placeholder-gray-400"
           />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={14} />
+            </button>
+          )}
         </div>
-      </div>
-
-      {/* Note about removal */}
-      <div className="mb-4 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
-        <AlertCircle size={12} className="flex-shrink-0" />
-        Removing from this list does not delete the subscriber globally. Manage all subscribers in the Subscribers page.
+        {allTags.length > 0 && (
+          <>
+            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${
+                  activeTag === tag
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                }`}
+              >
+                {tag}
+                {activeTag === tag && <X size={10} />}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+        <div className="flex items-center gap-1.5 px-4 py-2 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
+          <AlertCircle size={11} className="text-gray-400 flex-shrink-0" />
+          <span className="text-xs text-gray-400 dark:text-gray-500">Removing from this list does not delete the subscriber globally.</span>
+        </div>
         <Table
           columns={columns}
           data={filtered}
