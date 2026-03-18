@@ -4,7 +4,7 @@ import {
   getList, getSubscribersForList, removeSubscriberFromList,
   getImportHistory, getAllTags,
   getTagsForSubscriber, setTagsForSubscriber, getBounces, removeBounce,
-  updateSubscriber, getLists, getListsForSubscriber, addSubscriberToList,
+  updateSubscriber, getLists, getListsForSubscriber, addSubscriberToList, deleteSubscribers,
 } from '../../db/database';
 import type { List, Subscriber, ImportHistory, Bounce } from '../../types';
 import { Button } from '../ui/Button';
@@ -21,15 +21,17 @@ interface SubscriberEditModalProps {
   allLists: List[];
   onClose: () => void;
   onSaved: () => void;
+  onDeleted: () => void;
 }
 
-function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved }: SubscriberEditModalProps) {
+function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved, onDeleted }: SubscriberEditModalProps) {
   const [name, setName] = useState(subscriber.name ?? '');
   const [selectedTags, setSelectedTags] = useState<string[]>(() => getTagsForSubscriber(subscriber.id));
   const [memberListIds, setMemberListIds] = useState<number[]>(() =>
     getListsForSubscriber(subscriber.id).map((l) => l.id)
   );
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
     try {
@@ -47,6 +49,12 @@ function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const handleDelete = () => {
+    deleteSubscribers([subscriber.id]);
+    onDeleted();
+    onClose();
   };
 
   return (
@@ -90,10 +98,25 @@ function SubscriberEditModal({ subscriber, allTags, allLists, onClose, onSaved }
             />
           </div>
         )}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave}>Save</Button>
-        </div>
+        {confirmDelete ? (
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">Delete this subscriber permanently?</p>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={handleDelete}>Delete</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={14} />Delete
+            </Button>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" onClick={handleSave}>Save</Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -380,7 +403,7 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Date</th>
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Source</th>
                   <th className="text-right px-4 py-2.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Added</th>
@@ -438,6 +461,7 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
           allLists={allLists}
           onClose={() => setEditingSubscriber(null)}
           onSaved={refresh}
+          onDeleted={refresh}
         />
       )}
     </div>

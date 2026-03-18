@@ -43,9 +43,10 @@ interface EditModalProps {
   allTags: string[];
   onClose: () => void;
   onSaved: () => void;
+  onDeleted: () => void;
 }
 
-function EditModal({ subscriber, allLists, allTags, onClose, onSaved }: EditModalProps) {
+function EditModal({ subscriber, allLists, allTags, onClose, onSaved, onDeleted }: EditModalProps) {
   const [email, setEmail] = useState(subscriber.email);
   const [name, setName] = useState(subscriber.name);
   const [selectedTags, setSelectedTags] = useState<string[]>(() => getTagsForSubscriber(subscriber.id));
@@ -54,6 +55,7 @@ function EditModal({ subscriber, allLists, allTags, onClose, onSaved }: EditModa
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleSave = () => {
     if (!email.trim()) { setError('Email is required.'); return; }
@@ -73,6 +75,12 @@ function EditModal({ subscriber, allLists, allTags, onClose, onSaved }: EditModa
       setError(e instanceof Error ? e.message : String(e));
       setSaving(false);
     }
+  };
+
+  const handleDelete = () => {
+    deleteSubscribers([subscriber.id]);
+    onDeleted();
+    onClose();
   };
 
   return (
@@ -116,10 +124,25 @@ function EditModal({ subscriber, allLists, allTags, onClose, onSaved }: EditModa
             />
           </div>
         )}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={handleSave} loading={saving}>Save</Button>
-        </div>
+        {confirmDelete ? (
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400">Delete this subscriber permanently?</p>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={handleDelete}>Delete</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={14} />Delete
+            </Button>
+            <div className="flex gap-3">
+              <Button variant="secondary" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" onClick={handleSave} loading={saving}>Save</Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -270,7 +293,7 @@ export function SubscribersPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+              <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
                 <th className="w-10 px-4 py-3">
                   <div
                     onClick={toggleSelectAll}
@@ -312,11 +335,12 @@ export function SubscribersPage() {
                   return (
                     <tr
                       key={subscriber.id}
-                      className={`group hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                      onClick={() => setEditingSubscriber(subscriber)}
+                      className={`group cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
                         isSelected ? 'bg-indigo-50 dark:bg-indigo-900/10' : ''
                       }`}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div
                           onClick={() =>
                             setSelectedIds((prev) =>
@@ -361,7 +385,7 @@ export function SubscribersPage() {
                         {formatDate(subscriber.created_at)}
                       </td>
                       {/* Actions */}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setEditingSubscriber(subscriber)}
@@ -426,6 +450,7 @@ export function SubscribersPage() {
           allTags={allTags}
           onClose={() => setEditingSubscriber(null)}
           onSaved={refresh}
+          onDeleted={refresh}
         />
       )}
 

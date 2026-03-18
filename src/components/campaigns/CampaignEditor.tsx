@@ -64,6 +64,7 @@ function buildEmailHtml(subject: string, body: string, _senderName: string, prev
   table{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:14px}
   th{padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;text-align:left}
   td{padding:8px 12px;border:1px solid #e5e7eb}
+  img{max-width:100%;height:auto;display:block;margin:0 0 14px}
   input[type=checkbox]{margin-right:6px;vertical-align:middle}
 </style>
 </head>

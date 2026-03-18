@@ -51,11 +51,12 @@ interface TagsListsPickerProps {
   onTagsChange: (tags: string[]) => void;
   onListsChange: (ids: number[]) => void;
   primaryListId?: number | null;
+  singleMode?: boolean;
 }
 
 function TagsListsPicker({
   allTags, allLists, selectedTags, selectedListIds,
-  onTagsChange, onListsChange, primaryListId,
+  onTagsChange, onListsChange, primaryListId, singleMode,
 }: TagsListsPickerProps) {
   const listOptions = allLists
     .filter((l) => primaryListId == null || l.id !== primaryListId)
@@ -65,7 +66,7 @@ function TagsListsPicker({
     <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-700">
       <div>
         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
-          Apply tags to all
+          {singleMode ? 'Apply tags' : 'Apply tags to all'}
         </label>
         <MultiSelect
           options={allTags.map((t) => ({ id: t, label: t }))}
@@ -180,7 +181,7 @@ function ExistingPicker({ listId, allTags, onImported, onClose }: ExistingPicker
         <div className="border border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden">
           <div
             onClick={toggleAll}
-            className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
+            className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
           >
             <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${allSelected ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700'}`}>
               {allSelected && <Check size={10} className="text-white" />}
@@ -442,6 +443,7 @@ export function ImportModal({ isOpen, onClose, listId, onImported }: ImportModal
               selectedTags={selectedTags} selectedListIds={selectedListIds}
               onTagsChange={setSelectedTags} onListsChange={setSelectedListIds}
               primaryListId={listId}
+              singleMode
             />
           </div>
         )}
