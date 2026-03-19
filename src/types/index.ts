@@ -47,7 +47,17 @@ export interface Subscriber {
   tags?: string; // comma-joined
 }
 
-export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'subscribers' | 'themes';
+export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'subscribers' | 'themes' | 'templates';
+
+export interface EmailTemplate {
+  id: number;
+  name: string;
+  description: string;
+  subject: string;
+  body: string;
+  is_builtin: number;
+  created_at: string;
+}
 
 export interface AppState {
   currentPage: Page;

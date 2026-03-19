@@ -16,7 +16,8 @@ import { CampaignEditor } from './components/campaigns/CampaignEditor';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { SubscribersPage } from './components/subscribers/SubscribersPage';
 import { ThemesPage } from './components/themes/ThemesPage';
-import type { Page } from './types';
+import { TemplatesPage } from './components/templates/TemplatesPage';
+import type { Page, EmailTemplate } from './types';
 
 type AppStatus = 'loading' | 'welcome' | 'onboarding' | 'ready' | 'error';
 
@@ -69,6 +70,7 @@ export default function App() {
   const [page, setPage] = useState<Page>('lists');
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
+  const [templateToLoad, setTemplateToLoad] = useState<EmailTemplate | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsApi = hasFileSystemApi();
 
@@ -193,6 +195,7 @@ export default function App() {
     setPage('lists');
     setSelectedListId(null);
     setSelectedCampaignId(null);
+    setTemplateToLoad(null);
   };
 
   const navigate = (p: Page) => {
@@ -285,6 +288,8 @@ export default function App() {
         return (
           <CampaignEditor
             campaignId={selectedCampaignId}
+            templateToLoad={templateToLoad}
+            onTemplateLoaded={() => setTemplateToLoad(null)}
             onBack={() => navigate('campaigns')}
             onSaved={(id) => setSelectedCampaignId(id)}
           />
@@ -293,6 +298,16 @@ export default function App() {
         return <SubscribersPage />;
       case 'themes':
         return <ThemesPage />;
+      case 'templates':
+        return (
+          <TemplatesPage
+            onUseTemplate={(t) => {
+              setTemplateToLoad(t);
+              setSelectedCampaignId(null);
+              setPage('campaign-editor');
+            }}
+          />
+        );
       case 'settings':
         return <SettingsPage />;
       default:

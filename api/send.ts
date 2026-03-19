@@ -43,7 +43,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await transporter.sendMail({ from, to: toAddress, subject, html, text });
     res.json({ ok: true });
   } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
-    res.status(500).json({ ok: false, error });
+    const err = e as { message?: string; responseCode?: number; response?: string };
+    const error = err.message ?? String(e);
+    const responseCode = err.responseCode;
+    const smtpResponse = err.response;
+    res.status(500).json({ ok: false, error, responseCode, smtpResponse });
   }
 }

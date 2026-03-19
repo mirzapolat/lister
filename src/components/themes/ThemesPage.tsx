@@ -317,9 +317,10 @@ interface ThemePreviewModalProps {
   onClose: () => void;
   onSetDefault: () => void;
   onDuplicateAndEdit: () => void;
+  onDelete: () => void;
 }
 
-function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit }: ThemePreviewModalProps) {
+function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit, onDelete }: ThemePreviewModalProps) {
   const previewDoc = useMemo(() => renderPreview(theme.template_html), [theme.template_html]);
   const isDefault = theme.is_default === 1;
 
@@ -361,6 +362,13 @@ function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit }:
             >
               <Copy size={12} />Duplicate &amp; Edit
             </button>
+            <button
+              onClick={onDelete}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Delete theme"
+            >
+              <Trash2 size={12} />Delete
+            </button>
           </div>
         </div>
         <iframe
@@ -379,18 +387,16 @@ function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit }:
 
 interface ThemeCardProps {
   theme: EmailTheme;
-  customCount: number;
   onClick: () => void;
   onSetDefault: () => void;
   onDuplicateAndEdit: () => void;
   onDelete: () => void;
 }
 
-function ThemeCard({ theme, customCount, onClick, onSetDefault, onDuplicateAndEdit, onDelete }: ThemeCardProps) {
+function ThemeCard({ theme, onClick, onSetDefault, onDuplicateAndEdit, onDelete }: ThemeCardProps) {
   const previewDoc = useMemo(() => renderPreview(theme.template_html), [theme.template_html]);
   const isDefault = theme.is_default === 1;
   const isBuiltin = theme.is_builtin === 1;
-  const isOnlyCustom = !isBuiltin && customCount === 1;
 
   return (
     <div
@@ -452,16 +458,13 @@ function ThemeCard({ theme, customCount, onClick, onSetDefault, onDuplicateAndEd
             <Copy size={12} />
           </button>
 
-          {!isBuiltin && (
-            <button
-              onClick={onDelete}
-              disabled={isOnlyCustom}
-              title={isOnlyCustom ? 'Cannot delete the only custom theme' : 'Delete theme'}
-              className={`p-1.5 rounded-lg transition-colors ${isOnlyCustom ? 'text-gray-200 dark:text-gray-700 cursor-default' : 'text-gray-300 dark:text-gray-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
-            >
-              <Trash2 size={12} />
-            </button>
-          )}
+          <button
+            onClick={onDelete}
+            title="Delete theme"
+            className="p-1.5 rounded-lg transition-colors text-gray-300 dark:text-gray-600 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 size={12} />
+          </button>
         </div>
       </div>
     </div>
@@ -590,7 +593,7 @@ export function ThemesPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Themes</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Themes</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {themes.length} theme{themes.length !== 1 ? 's' : ''} — controls how your campaigns look
           </p>
@@ -658,7 +661,6 @@ export function ThemesPage() {
             <ThemeCard
               key={theme.id}
               theme={theme}
-              customCount={customCount}
               onClick={() => handleCardClick(theme)}
               onSetDefault={() => handleSetDefault(theme)}
               onDuplicateAndEdit={() => handleDuplicateAndEdit(theme)}
@@ -675,6 +677,7 @@ export function ThemesPage() {
           onClose={() => setPreviewTarget(null)}
           onSetDefault={() => { handleSetDefault(previewTarget); setPreviewTarget({ ...previewTarget, is_default: 1 }); }}
           onDuplicateAndEdit={() => handleDuplicateAndEdit(previewTarget)}
+          onDelete={() => { setPreviewTarget(null); setDeleteTarget(previewTarget); }}
         />
       )}
 

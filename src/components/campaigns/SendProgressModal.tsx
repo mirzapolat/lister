@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle, XCircle, X } from 'lucide-react';
+import { CheckCircle, XCircle, X, AlertTriangle } from 'lucide-react';
 import { getSubscribersForList, getSubscribersWithTag, addBounce, recordCampaignSend, saveDatabase } from '../../db/database';
 import type { Subscriber, SmtpSettings } from '../../types';
 
@@ -7,6 +7,7 @@ interface Recipient {
   contact: Subscriber;
   status: 'pending' | 'sending' | 'sent' | 'failed';
   error?: string;
+  bounced?: boolean;
 }
 
 interface SendProgressModalProps {
@@ -22,11 +23,20 @@ interface SendProgressModalProps {
   tagFilter?: string;
 }
 
-const BOUNCE_INDICATORS = ['550', 'user unknown', 'does not exist', 'invalid', 'rejected', 'no such user', 'mailbox not found'];
+// Text patterns used as fallback when no SMTP response code is available
+const HARD_BOUNCE_PATTERNS = [
+  'user unknown', 'does not exist', 'no such user', 'mailbox not found',
+  'mailbox unavailable', 'invalid address', 'invalid mailbox', 'address rejected',
+  'recipient rejected', 'recipient address rejected', 'undeliverable',
+  'bad destination mailbox', 'account does not exist', 'no mailbox',
+];
 
-function isBounceError(msg: string): boolean {
+function isHardBounce(msg: string, responseCode?: number): boolean {
+  // 5xx = permanent failure (hard bounce): address doesn't exist, rejected, etc.
+  if (responseCode !== undefined) return responseCode >= 500 && responseCode < 600;
+  // Fallback: scan error message text
   const lower = msg.toLowerCase();
-  return BOUNCE_INDICATORS.some((indicator) => lower.includes(indicator));
+  return HARD_BOUNCE_PATTERNS.some((p) => lower.includes(p));
 }
 
 function applyTokens(template: string, contact: Subscriber): string {
@@ -35,6 +45,16 @@ function applyTokens(template: string, contact: Subscriber): string {
     .replace(/\{\{name\}\}/g, contact.name ?? '')
     .replace(/\{\{email\}\}/g, contact.email ?? '')
     .replace(/\{\{first_name\}\}/g, firstName);
+}
+
+class SendError extends Error {
+  responseCode?: number;
+  smtpResponse?: string;
+  constructor(message: string, responseCode?: number, smtpResponse?: string) {
+    super(message);
+    this.responseCode = responseCode;
+    this.smtpResponse = smtpResponse;
+  }
 }
 
 async function sendOne(
@@ -58,10 +78,12 @@ async function sendOne(
     const msg = e instanceof TypeError
       ? `Cannot reach ${base} — check API URL in Settings or CORS headers on the server`
       : String(e);
-    throw new Error(msg);
+    throw new SendError(msg);
   }
   const data = await res.json();
-  if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  if (!res.ok || !data.ok) {
+    throw new SendError(data.error ?? `HTTP ${res.status}`, data.responseCode, data.smtpResponse);
+  }
 }
 
 export function SendProgressModal({ campaignId, listId, subject, html, text, smtp, rateLimit, onClose, onAllSent, tagFilter }: SendProgressModalProps) {
@@ -76,6 +98,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
 
   const sentCount = recipients.filter((r) => r.status === 'sent').length;
   const failedCount = recipients.filter((r) => r.status === 'failed').length;
+  const bouncedCount = recipients.filter((r) => r.status === 'failed' && r.bounced).length;
   const progress = recipients.length > 0 ? ((sentCount + failedCount) / recipients.length) * 100 : 0;
 
   useEffect(() => {
@@ -98,16 +121,15 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
             prev.map((r) => r.contact.id === contact.id ? { ...r, status: 'sent' } : r)
           );
         } catch (e) {
-          const errorMsg = e instanceof Error ? e.message : String(e);
-          // Auto-register bounce if error looks like a bounce
-          if (isBounceError(errorMsg)) {
-            addBounce(contact.email, errorMsg);
-          }
+          const err = e instanceof SendError ? e : new SendError(e instanceof Error ? e.message : String(e));
+          const errorMsg = err.smtpResponse ?? err.message;
+          const bounced = isHardBounce(err.message, err.responseCode);
+          if (bounced) addBounce(contact.email, errorMsg);
           recordCampaignSend(campaignId, contact.id, 'failed', errorMsg);
           setRecipients((prev) =>
             prev.map((r) =>
               r.contact.id === contact.id
-                ? { ...r, status: 'failed', error: errorMsg }
+                ? { ...r, status: 'failed', error: errorMsg, bounced }
                 : r
             )
           );
@@ -174,11 +196,19 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
                   <p className="text-sm text-gray-400 text-center py-4">No contacts in the selected list{tagFilter ? ` with tag "${tagFilter}"` : ''}.</p>
                 )}
                 {recipients.filter(r => r.status === 'failed').map((r) => (
-                  <div key={r.contact.id} className="flex items-start gap-2 py-1">
-                    <XCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <div key={r.contact.id} className="flex items-start gap-2 py-1.5">
+                    {r.bounced
+                      ? <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                      : <XCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+                    }
                     <div className="min-w-0">
-                      <span className="text-sm text-red-500 truncate block">{r.contact.email}</span>
-                      {r.error && <p className="text-xs text-red-400">{r.error}</p>}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-red-500 truncate">{r.contact.email}</span>
+                        {r.bounced && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 font-medium flex-shrink-0">bounced</span>
+                        )}
+                      </div>
+                      {r.error && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{r.error}</p>}
                     </div>
                   </div>
                 ))}
@@ -196,7 +226,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
                   {failedCount > 0 && (
                     <div className="flex items-center gap-1.5 text-sm text-red-500">
                       <XCircle size={15} />
-                      <span><strong>{failedCount}</strong> failed</span>
+                      <span><strong>{failedCount}</strong> failed{bouncedCount > 0 ? ` (${bouncedCount} bounced)` : ''}</span>
                     </div>
                   )}
                   <button

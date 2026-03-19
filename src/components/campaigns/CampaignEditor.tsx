@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Save, Send, Eye, EyeOff, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Send, Eye, EyeOff, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle, BookOpen, BookmarkPlus, X, Check } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 import { Marked } from 'marked';
-import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile, getThemes, getDefaultTheme, getSubscribersForList } from '../../db/database';
-import type { List, SenderProfile, EmailTheme } from '../../types';
+import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile, getThemes, getDefaultTheme, getSubscribersForList, getTemplates, createTemplate } from '../../db/database';
+import type { List, SenderProfile, EmailTheme, EmailTemplate } from '../../types';
 import { Button } from '../ui/Button';
 import { SendProgressModal } from './SendProgressModal';
 import { TestEmailModal } from './TestEmailModal';
 
 interface CampaignEditorProps {
   campaignId: number | null;
+  templateToLoad?: EmailTemplate | null;
+  onTemplateLoaded?: () => void;
   onBack: () => void;
   onSaved: (id: number) => void;
 }
@@ -166,7 +168,7 @@ function SendConfirmModal({ name, subject, list, profile, theme, tagFilter, onCo
   );
 }
 
-export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorProps) {
+export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, onBack, onSaved }: CampaignEditorProps) {
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('# Hello!\n\nWrite your email content here.\n\n---\n\nBest regards');
@@ -184,6 +186,8 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
   const [showSendModal, setShowSendModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
+  const [showLoadTemplateModal, setShowLoadTemplateModal] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(campaignId);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -211,6 +215,15 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
       }
     }
   }, [campaignId]);
+
+  // Apply a template when one is passed in from the Templates page
+  useEffect(() => {
+    if (templateToLoad) {
+      setSubject(templateToLoad.subject);
+      setBody(templateToLoad.body);
+      onTemplateLoaded?.();
+    }
+  }, [templateToLoad]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -328,6 +341,22 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
         <div className="flex items-center gap-2">
           {saved && <span className="text-xs text-green-600 font-medium">Saved</span>}
           <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">⌘S save · ⌘↵ send</span>
+          <button
+            onClick={() => setShowLoadTemplateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Load a template"
+          >
+            <BookOpen size={14} />
+            Template
+          </button>
+          <button
+            onClick={() => setShowSaveTemplateModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title="Save as template"
+          >
+            <BookmarkPlus size={14} />
+            Save as Template
+          </button>
           <button
             onClick={() => setShowPreview(!showPreview)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
@@ -512,6 +541,188 @@ export function CampaignEditor({ campaignId, onBack, onSaved }: CampaignEditorPr
           onClose={() => setShowTestModal(false)}
         />
       )}
+
+      {showLoadTemplateModal && (
+        <LoadTemplateModal
+          onClose={() => setShowLoadTemplateModal(false)}
+          onLoad={(t) => {
+            setSubject(t.subject);
+            setBody(t.body);
+            setShowLoadTemplateModal(false);
+          }}
+        />
+      )}
+
+      {showSaveTemplateModal && (
+        <SaveTemplateModal
+          defaultName={name}
+          subject={subject}
+          body={body}
+          onClose={() => setShowSaveTemplateModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Load Template Modal ───────────────────────────────────────────────────────
+
+interface LoadTemplateModalProps {
+  onClose: () => void;
+  onLoad: (template: EmailTemplate) => void;
+}
+
+function LoadTemplateModal({ onClose, onLoad }: LoadTemplateModalProps) {
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => { setTemplates(getTemplates()); }, []);
+
+  const filtered = search
+    ? templates.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()) || t.subject.toLowerCase().includes(search.toLowerCase()))
+    : templates;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Load Template</h3>
+            <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search templates..."
+              autoFocus
+              className="w-full pl-3 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X size={13} />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">Loading a template will replace the current subject and body.</p>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {filtered.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-gray-400 dark:text-gray-500">No templates found.</div>
+          ) : (
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              {filtered.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => onLoad(t)}
+                  className="w-full px-6 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white">{t.name}</span>
+                    {t.is_builtin === 1 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium">Preset</span>
+                    )}
+                  </div>
+                  {t.subject && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.subject}</p>}
+                  {t.description && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{t.description}</p>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Save Template Modal ───────────────────────────────────────────────────────
+
+interface SaveTemplateModalProps {
+  defaultName: string;
+  subject: string;
+  body: string;
+  onClose: () => void;
+}
+
+function SaveTemplateModal({ defaultName, subject, body, onClose }: SaveTemplateModalProps) {
+  const [name, setName] = useState(defaultName ? defaultName + ' Template' : '');
+  const [description, setDescription] = useState('');
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    if (!name.trim()) { setError('Name is required'); return; }
+    createTemplate({ name: name.trim(), description: description.trim(), subject, body, is_builtin: 0 });
+    setSaved(true);
+    setTimeout(() => onClose(), 1200);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm mx-4 z-10 overflow-hidden">
+        <div className="px-6 pt-5 pb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">Save as Template</h3>
+            <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <X size={16} />
+            </button>
+          </div>
+          {saved ? (
+            <div className="flex items-center gap-2 py-3 text-green-600 dark:text-green-400">
+              <Check size={16} />
+              <span className="text-sm font-medium">Template saved!</span>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Template Name *</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); setError(''); }}
+                  placeholder="e.g. My Newsletter Template"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onClose(); }}
+                  className={`w-full px-3 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${error ? 'border-red-400' : 'border-gray-300 dark:border-gray-600'}`}
+                />
+                {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Brief description..."
+                  className="w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Saves the current subject and body as a reusable template.</p>
+            </div>
+          )}
+        </div>
+        {!saved && (
+          <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/60 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-4 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+            >
+              Save Template
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

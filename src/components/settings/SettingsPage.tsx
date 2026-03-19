@@ -567,7 +567,7 @@ export function SettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Sender Profiles</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sender Profiles</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             Manage your SMTP configurations and sending identities
           </p>

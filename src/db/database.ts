@@ -1,7 +1,8 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { SCHEMA_SQL, MIGRATION_SQL } from './schema';
-import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend, EmailTheme } from '../types';
+import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend, EmailTheme, EmailTemplate } from '../types';
 import { BUILTIN_THEMES } from '../themes/builtinThemes';
+import { BUILTIN_TEMPLATES } from '../themes/builtinTemplates';
 
 let SQL: SqlJsStatic | null = null;
 let db: Database | null = null;
@@ -73,6 +74,7 @@ export async function createNewDatabase(): Promise<Database> {
   db.run(SCHEMA_SQL);
   db.run(MIGRATION_SQL);
   seedBuiltinThemes();
+  seedBuiltinTemplates();
   return db;
 }
 
@@ -100,6 +102,7 @@ export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promis
   }
   db.run(MIGRATION_SQL);
   seedBuiltinThemes();
+  seedBuiltinTemplates();
   await storeFileHandleInIDB(handle);
   return db;
 }
@@ -154,6 +157,8 @@ export async function openDatabaseFromFileInput(file: File): Promise<{ db: Datab
   db.run("PRAGMA foreign_keys = ON;");
   db.run(SCHEMA_SQL);
   db.run(MIGRATION_SQL);
+  seedBuiltinThemes();
+  seedBuiltinTemplates();
   fallbackFileName = file.name;
   fileHandle = null;
   return { db, fileName: file.name };
@@ -995,5 +1000,82 @@ export function seedBuiltinThemes(): void {
   if (noFooterId && !noFooterIsDefault && cleanIsDefault === 1) {
     database.run('UPDATE themes SET is_default = 0 WHERE name = ? AND is_builtin = 1', ['Clean']);
     database.run('UPDATE themes SET is_default = 1 WHERE id = ?', [noFooterId]);
+  }
+}
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+
+function rowsToTemplates(columns: string[], values: (string | number | null)[][]): EmailTemplate[] {
+  return values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as EmailTemplate;
+  });
+}
+
+export function getTemplates(): EmailTemplate[] {
+  const result = getDb().exec('SELECT * FROM templates ORDER BY is_builtin DESC, created_at ASC');
+  if (!result.length) return [];
+  const [{ columns, values }] = result;
+  return rowsToTemplates(columns, values as (string | number | null)[][]);
+}
+
+export function getTemplate(id: number): EmailTemplate | null {
+  const result = queryOne('SELECT * FROM templates WHERE id = ?', [id]);
+  if (!result) return null;
+  return rowsToTemplates(result.columns, [result.row])[0];
+}
+
+export function createTemplate(t: Omit<EmailTemplate, 'id' | 'created_at'>): number {
+  const database = getDb();
+  database.run(
+    'INSERT INTO templates (name, description, subject, body, is_builtin) VALUES (?, ?, ?, ?, ?)',
+    [t.name, t.description, t.subject, t.body, t.is_builtin]
+  );
+  const id = database.exec('SELECT last_insert_rowid() as id')[0]?.values[0]?.[0] as number;
+  saveDatabase();
+  return id;
+}
+
+export function updateTemplate(id: number, t: Omit<EmailTemplate, 'id' | 'created_at'>): void {
+  getDb().run(
+    'UPDATE templates SET name=?, description=?, subject=?, body=?, is_builtin=? WHERE id=?',
+    [t.name, t.description, t.subject, t.body, t.is_builtin, id]
+  );
+  saveDatabase();
+}
+
+export function deleteTemplate(id: number): void {
+  getDb().run('DELETE FROM templates WHERE id = ?', [id]);
+  saveDatabase();
+}
+
+export function duplicateTemplate(id: number): number {
+  const t = getTemplate(id);
+  if (!t) throw new Error('Template not found');
+  return createTemplate({
+    name: t.name + ' (Copy)',
+    description: t.description,
+    subject: t.subject,
+    body: t.body,
+    is_builtin: 0,
+  });
+}
+
+export function seedBuiltinTemplates(): void {
+  const database = getDb();
+  for (const t of BUILTIN_TEMPLATES) {
+    const alreadyExists = queryExists('SELECT id FROM templates WHERE name = ? AND is_builtin = 1', [t.name]);
+    if (!alreadyExists) {
+      database.run(
+        'INSERT INTO templates (name, description, subject, body, is_builtin) VALUES (?, ?, ?, ?, 1)',
+        [t.name, t.description, t.subject, t.body]
+      );
+    } else {
+      database.run(
+        'UPDATE templates SET subject=?, body=?, description=? WHERE name=? AND is_builtin=1',
+        [t.subject, t.body, t.description, t.name]
+      );
+    }
   }
 }

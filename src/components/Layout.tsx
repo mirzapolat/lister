@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { List, Users, Send, Radio, Download, Moon, Sun, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette } from 'lucide-react';
+import { List, Users, Send, Radio, Download, Moon, Sun, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen } from 'lucide-react';
 import type { Page } from '../types';
 
 interface NavChild {
@@ -23,13 +23,14 @@ const navItems: NavItem[] = [
     label: 'Campaigns',
     icon: <Send size={18} />,
     children: [
+      { id: 'templates', label: 'Templates', icon: <BookOpen size={15} /> },
       { id: 'themes', label: 'Themes', icon: <Palette size={15} /> },
     ],
   },
   { id: 'settings', label: 'Sender Profiles', icon: <Radio size={18} /> },
 ];
 
-const topLevelPages: Page[] = ['lists', 'subscribers', 'campaigns', 'themes', 'settings'];
+const topLevelPages: Page[] = ['lists', 'subscribers', 'campaigns', 'themes', 'templates', 'settings'];
 
 function getParentId(page: Page): Page | null {
   for (const item of navItems) {

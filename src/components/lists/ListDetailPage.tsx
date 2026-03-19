@@ -334,7 +334,7 @@ export function ListDetailPage({ listId, onBack }: ListDetailPageProps) {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{list?.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{list?.name}</h2>
             {list?.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{list.description}</p>}
             <p className="text-sm text-gray-400 mt-1">{subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''}</p>
           </div>
