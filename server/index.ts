@@ -35,7 +35,7 @@ function createTransporter(smtp: SmtpConfig) {
       pass: smtp.smtp_password,
     } : undefined,
     requireTLS: smtp.smtp_tls === 'true' && Number(smtp.smtp_port) !== 465,
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false' },
   });
 }
 
@@ -57,8 +57,13 @@ app.post('/api/send', async (req, res) => {
 
   const toAddress = toName ? `"${toName}" <${to}>` : to;
 
-  await transporter.sendMail({ from, to: toAddress, subject, html, text });
-  res.json({ ok: true });
+  try {
+    await transporter.sendMail({ from, to: toAddress, subject, html, text });
+    res.json({ ok: true });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ ok: false, error });
+  }
 });
 
 app.post('/api/test', async (req, res) => {

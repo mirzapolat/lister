@@ -208,6 +208,38 @@ export function getDb(): Database {
   return db;
 }
 
+// ── Parameterized query helpers (use instead of string interpolation) ─────────
+
+type SqlParam = string | number | null;
+
+function queryRows(sql: string, params: SqlParam[] = []): { columns: string[]; values: SqlParam[][] } | null {
+  const stmt = getDb().prepare(sql);
+  stmt.bind(params);
+  const columns = stmt.getColumnNames();
+  const rows: SqlParam[][] = [];
+  while (stmt.step()) rows.push(stmt.get() as SqlParam[]);
+  stmt.free();
+  return rows.length ? { columns, values: rows } : null;
+}
+
+function queryOne(sql: string, params: SqlParam[] = []): { columns: string[]; row: SqlParam[] } | null {
+  const stmt = getDb().prepare(sql);
+  stmt.bind(params);
+  const columns = stmt.getColumnNames();
+  const found = stmt.step();
+  const row = found ? (stmt.get() as SqlParam[]) : null;
+  stmt.free();
+  return row ? { columns, row } : null;
+}
+
+function queryExists(sql: string, params: SqlParam[] = []): boolean {
+  const stmt = getDb().prepare(sql);
+  stmt.bind(params);
+  const found = stmt.step();
+  stmt.free();
+  return found;
+}
+
 // Lists
 
 export function getLists(): List[] {
@@ -230,16 +262,15 @@ export function getLists(): List[] {
 }
 
 export function getList(id: number): List | null {
-  const database = getDb();
-  const result = database.exec(
+  const result = queryOne(
     `SELECT l.id, l.name, l.description, l.created_at, COUNT(c.id) as contact_count
      FROM lists l LEFT JOIN contacts c ON c.list_id = l.id
-     WHERE l.id = ${id} GROUP BY l.id`
+     WHERE l.id = ? GROUP BY l.id`,
+    [id]
   );
-  if (!result.length || !result[0].values.length) return null;
-  const { columns, values } = result[0];
+  if (!result) return null;
   const obj: Record<string, unknown> = {};
-  columns.forEach((col, i) => { obj[col] = values[0][i]; });
+  result.columns.forEach((col, i) => { obj[col] = result.row[i]; });
   return obj as unknown as List;
 }
 
@@ -261,14 +292,14 @@ export function deleteList(id: number): void {
 // Contacts
 
 export function getContacts(listId: number): Contact[] {
-  const result = getDb().exec(
-    `SELECT id, list_id, email, name, created_at FROM contacts WHERE list_id = ${listId} ORDER BY created_at DESC`
+  const result = queryRows(
+    'SELECT id, list_id, email, name, created_at FROM contacts WHERE list_id = ? ORDER BY created_at DESC',
+    [listId]
   );
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return values.map((row) => {
+  if (!result) return [];
+  return result.values.map((row) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as Contact;
   });
 }
@@ -292,19 +323,13 @@ export function addContacts(
     if (!trimmedEmail) continue;
 
     // Check if bounced
-    const bouncedResult = database.exec(
-      `SELECT id FROM bounces WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`
-    );
-    if (bouncedResult.length && bouncedResult[0].values.length) {
+    if (queryExists('SELECT id FROM bounces WHERE email = ?', [trimmedEmail])) {
       skipped++;
       continue;
     }
 
     // Check if already exists in list
-    const existsResult = database.exec(
-      `SELECT id FROM contacts WHERE list_id = ${listId} AND email = '${trimmedEmail.replace(/'/g, "''")}'`
-    );
-    if (existsResult.length && existsResult[0].values.length) {
+    if (queryExists('SELECT id FROM contacts WHERE list_id = ? AND email = ?', [listId, trimmedEmail])) {
       skipped++;
       continue;
     }
@@ -327,6 +352,7 @@ export function addContacts(
 
 export function deleteContacts(ids: number[]): void {
   if (!ids.length) return;
+  if (!ids.every(Number.isInteger)) throw new Error('deleteContacts: non-integer id');
   getDb().run(`DELETE FROM contacts WHERE id IN (${ids.join(',')})`);
   saveDatabase();
 }
@@ -351,16 +377,16 @@ export function getCampaigns(): Campaign[] {
 }
 
 export function getCampaign(id: number): Campaign | null {
-  const result = getDb().exec(`
-    SELECT c.id, c.name, c.subject, c.body, c.list_id, c.sender_profile_id, c.theme_id,
-           c.status, c.created_at, c.sent_at, l.name as list_name
-    FROM campaigns c LEFT JOIN lists l ON l.id = c.list_id
-    WHERE c.id = ${id}
-  `);
-  if (!result.length || !result[0].values.length) return null;
-  const { columns, values } = result[0];
+  const result = queryOne(
+    `SELECT c.id, c.name, c.subject, c.body, c.list_id, c.sender_profile_id, c.theme_id,
+            c.status, c.created_at, c.sent_at, l.name as list_name
+     FROM campaigns c LEFT JOIN lists l ON l.id = c.list_id
+     WHERE c.id = ?`,
+    [id]
+  );
+  if (!result) return null;
   const obj: Record<string, unknown> = {};
-  columns.forEach((col, i) => { obj[col] = values[0][i]; });
+  result.columns.forEach((col, i) => { obj[col] = result.row[i]; });
   return obj as unknown as Campaign;
 }
 
@@ -465,18 +491,18 @@ export function setTagsForContact(contactId: number, tags: string[]): void {
 }
 
 export function getContactsWithTag(listId: number, tag: string): Contact[] {
-  const result = getDb().exec(
+  const result = queryRows(
     `SELECT c.id, c.list_id, c.email, c.name, c.created_at
      FROM contacts c
      INNER JOIN contact_tags ct ON ct.contact_id = c.id
-     WHERE c.list_id = ${listId} AND ct.tag = '${tag.replace(/'/g, "''")}'
-     ORDER BY c.created_at DESC`
+     WHERE c.list_id = ? AND ct.tag = ?
+     ORDER BY c.created_at DESC`,
+    [listId, tag]
   );
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return values.map((row) => {
+  if (!result) return [];
+  return result.values.map((row) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as Contact;
   });
 }
@@ -492,15 +518,14 @@ export function addImportHistory(listId: number, addedCount: number, skippedCoun
 }
 
 export function getImportHistory(listId: number): ImportHistory[] {
-  const result = getDb().exec(
-    `SELECT id, list_id, added_count, skipped_count, source, created_at
-     FROM import_history WHERE list_id = ${listId} ORDER BY created_at DESC`
+  const result = queryRows(
+    'SELECT id, list_id, added_count, skipped_count, source, created_at FROM import_history WHERE list_id = ? ORDER BY created_at DESC',
+    [listId]
   );
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return values.map((row) => {
+  if (!result) return [];
+  return result.values.map((row) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as ImportHistory;
   });
 }
@@ -534,10 +559,7 @@ export function getBounces(): Bounce[] {
 }
 
 export function isEmailBounced(email: string): boolean {
-  const result = getDb().exec(
-    `SELECT id FROM bounces WHERE email = '${email.replace(/'/g, "''")}'`
-  );
-  return result.length > 0 && result[0].values.length > 0;
+  return queryExists('SELECT id FROM bounces WHERE email = ?', [email]);
 }
 
 // Rate limit
@@ -581,44 +603,43 @@ export function getAllSubscribers(): Subscriber[] {
 }
 
 export function getSubscriberById(id: number): Subscriber | null {
-  const result = getDb().exec(`
-    SELECT s.id, s.email, s.name, s.created_at,
-           COUNT(DISTINCT ls.list_id) as list_count,
-           GROUP_CONCAT(DISTINCT st.tag) as tags
-    FROM subscribers s
-    LEFT JOIN list_subscribers ls ON ls.subscriber_id = s.id
-    LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
-    WHERE s.id = ${id}
-    GROUP BY s.id
-  `);
-  if (!result.length || !result[0].values.length) return null;
-  const { columns, values } = result[0];
-  return rowsToSubscribers(columns, values as (string | number | null)[][])[0];
+  const result = queryOne(
+    `SELECT s.id, s.email, s.name, s.created_at,
+            COUNT(DISTINCT ls.list_id) as list_count,
+            GROUP_CONCAT(DISTINCT st.tag) as tags
+     FROM subscribers s
+     LEFT JOIN list_subscribers ls ON ls.subscriber_id = s.id
+     LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+     WHERE s.id = ?
+     GROUP BY s.id`,
+    [id]
+  );
+  if (!result) return null;
+  return rowsToSubscribers(result.columns, [result.row])[0];
 }
 
 export function getSubscribersForList(listId: number): Subscriber[] {
-  const result = getDb().exec(`
-    SELECT s.id, s.email, s.name, s.created_at,
-           COUNT(DISTINCT ls2.list_id) as list_count,
-           GROUP_CONCAT(DISTINCT st.tag) as tags
-    FROM subscribers s
-    JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ${listId}
-    LEFT JOIN list_subscribers ls2 ON ls2.subscriber_id = s.id
-    LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
-    GROUP BY s.id
-    ORDER BY s.created_at DESC
-  `);
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return rowsToSubscribers(columns, values as (string | number | null)[][]);
+  const result = queryRows(
+    `SELECT s.id, s.email, s.name, s.created_at,
+            COUNT(DISTINCT ls2.list_id) as list_count,
+            GROUP_CONCAT(DISTINCT st.tag) as tags
+     FROM subscribers s
+     JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ?
+     LEFT JOIN list_subscribers ls2 ON ls2.subscriber_id = s.id
+     LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+     GROUP BY s.id
+     ORDER BY s.created_at DESC`,
+    [listId]
+  );
+  if (!result) return [];
+  return rowsToSubscribers(result.columns, result.values);
 }
 
 export function upsertSubscriber(email: string, name: string): number {
-  const database = getDb();
   const trimmedEmail = email.trim();
-  database.run('INSERT OR IGNORE INTO subscribers (email, name) VALUES (?, ?)', [trimmedEmail, name.trim()]);
-  const result = database.exec(`SELECT id FROM subscribers WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`);
-  return result[0]?.values[0]?.[0] as number;
+  getDb().run('INSERT OR IGNORE INTO subscribers (email, name) VALUES (?, ?)', [trimmedEmail, name.trim()]);
+  const result = queryOne('SELECT id FROM subscribers WHERE email = ?', [trimmedEmail]);
+  return result!.row[0] as number;
 }
 
 export function addSubscriberToList(subscriberId: number, listId: number): void {
@@ -637,6 +658,7 @@ export function deleteSubscriber(id: number): void {
 
 export function deleteSubscribers(ids: number[]): void {
   if (!ids.length) return;
+  if (!ids.every(Number.isInteger)) throw new Error('deleteSubscribers: non-integer id');
   getDb().run(`DELETE FROM subscribers WHERE id IN (${ids.join(',')})`);
   saveDatabase();
 }
@@ -647,11 +669,9 @@ export function updateSubscriber(id: number, email: string, name: string): void 
 }
 
 export function getTagsForSubscriber(id: number): string[] {
-  const result = getDb().exec(
-    `SELECT tag FROM subscriber_tags WHERE subscriber_id = ${id} ORDER BY tag ASC`
-  );
-  if (!result.length) return [];
-  return result[0].values.map((row) => row[0] as string);
+  const result = queryRows('SELECT tag FROM subscriber_tags WHERE subscriber_id = ? ORDER BY tag ASC', [id]);
+  if (!result) return [];
+  return result.values.map((row) => row[0] as string);
 }
 
 export function setTagsForSubscriber(id: number, tags: string[]): void {
@@ -665,20 +685,20 @@ export function setTagsForSubscriber(id: number, tags: string[]): void {
 }
 
 export function getListsForSubscriber(id: number): List[] {
-  const result = getDb().exec(`
-    SELECT l.id, l.name, l.description, l.created_at,
-           COUNT(ls2.subscriber_id) as contact_count
-    FROM lists l
-    JOIN list_subscribers ls ON ls.list_id = l.id AND ls.subscriber_id = ${id}
-    LEFT JOIN list_subscribers ls2 ON ls2.list_id = l.id
-    GROUP BY l.id
-    ORDER BY l.name ASC
-  `);
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return values.map((row) => {
+  const result = queryRows(
+    `SELECT l.id, l.name, l.description, l.created_at,
+            COUNT(ls2.subscriber_id) as contact_count
+     FROM lists l
+     JOIN list_subscribers ls ON ls.list_id = l.id AND ls.subscriber_id = ?
+     LEFT JOIN list_subscribers ls2 ON ls2.list_id = l.id
+     GROUP BY l.id
+     ORDER BY l.name ASC`,
+    [id]
+  );
+  if (!result) return [];
+  return result.values.map((row) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as List;
   });
 }
@@ -702,10 +722,7 @@ export function addSubscribers(
     if (!trimmedEmail) continue;
 
     // Check if bounced
-    const bouncedResult = database.exec(
-      `SELECT id FROM bounces WHERE email = '${trimmedEmail.replace(/'/g, "''")}'`
-    );
-    if (bouncedResult.length && bouncedResult[0].values.length) {
+    if (queryExists('SELECT id FROM bounces WHERE email = ?', [trimmedEmail])) {
       skipped++;
       continue;
     }
@@ -715,10 +732,7 @@ export function addSubscribers(
 
     // Check if already in primary list (dedup metric)
     if (listId !== null) {
-      const existsResult = database.exec(
-        `SELECT id FROM list_subscribers WHERE list_id = ${listId} AND subscriber_id = ${subscriberId}`
-      );
-      if (existsResult.length && existsResult[0].values.length) {
+      if (queryExists('SELECT id FROM list_subscribers WHERE list_id = ? AND subscriber_id = ?', [listId, subscriberId])) {
         // Still apply tags to already-existing subscribers
         for (const tag of uniqueTags) {
           database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [subscriberId, tag]);
@@ -758,10 +772,7 @@ export function addSubscribersToList(subscriberIds: number[], listId: number, ta
   const uniqueTags = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
   let added = 0;
   for (const subscriberId of subscriberIds) {
-    const existsResult = database.exec(
-      `SELECT id FROM list_subscribers WHERE list_id = ${listId} AND subscriber_id = ${subscriberId}`
-    );
-    if (existsResult.length && existsResult[0].values.length) continue;
+    if (queryExists('SELECT id FROM list_subscribers WHERE list_id = ? AND subscriber_id = ?', [listId, subscriberId])) continue;
     addSubscriberToList(subscriberId, listId);
     for (const tag of uniqueTags) {
       database.run('INSERT OR IGNORE INTO subscriber_tags (subscriber_id, tag) VALUES (?, ?)', [subscriberId, tag]);
@@ -773,21 +784,21 @@ export function addSubscribersToList(subscriberIds: number[], listId: number, ta
 }
 
 export function getSubscribersWithTag(listId: number, tag: string): Subscriber[] {
-  const result = getDb().exec(
+  const result = queryRows(
     `SELECT s.id, s.email, s.name, s.created_at,
             COUNT(DISTINCT ls2.list_id) as list_count,
             GROUP_CONCAT(DISTINCT st2.tag) as tags
      FROM subscribers s
-     JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ${listId}
-     JOIN subscriber_tags st ON st.subscriber_id = s.id AND st.tag = '${tag.replace(/'/g, "''")}'
+     JOIN list_subscribers ls ON ls.subscriber_id = s.id AND ls.list_id = ?
+     JOIN subscriber_tags st ON st.subscriber_id = s.id AND st.tag = ?
      LEFT JOIN list_subscribers ls2 ON ls2.subscriber_id = s.id
      LEFT JOIN subscriber_tags st2 ON st2.subscriber_id = s.id
      GROUP BY s.id
-     ORDER BY s.created_at DESC`
+     ORDER BY s.created_at DESC`,
+    [listId, tag]
   );
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return rowsToSubscribers(columns, values as (string | number | null)[][]);
+  if (!result) return [];
+  return rowsToSubscribers(result.columns, result.values);
 }
 
 // ── Sender Profiles ───────────────────────────────────────────────────────────
@@ -808,10 +819,9 @@ export function getSenderProfiles(): SenderProfile[] {
 }
 
 export function getSenderProfile(id: number): SenderProfile | null {
-  const result = getDb().exec(`SELECT * FROM sender_profiles WHERE id = ${id}`);
-  if (!result.length || !result[0].values.length) return null;
-  const { columns, values } = result[0];
-  return rowsToProfiles(columns, values as (string | number | null)[][])[0];
+  const result = queryOne('SELECT * FROM sender_profiles WHERE id = ?', [id]);
+  if (!result) return null;
+  return rowsToProfiles(result.columns, [result.row])[0];
 }
 
 export function getDefaultSenderProfile(): SenderProfile | null {
@@ -876,20 +886,20 @@ export function recordCampaignSend(
 }
 
 export function getCampaignSendsForSubscriber(subscriberId: number): CampaignSend[] {
-  const result = getDb().exec(`
-    SELECT cs.id, cs.campaign_id, cs.subscriber_id, cs.sent_at, cs.status, cs.error,
-           c.name as campaign_name, c.subject as campaign_subject
-    FROM campaign_sends cs
-    LEFT JOIN campaigns c ON c.id = cs.campaign_id
-    WHERE cs.subscriber_id = ${subscriberId}
-    ORDER BY cs.sent_at DESC
-    LIMIT 100
-  `);
-  if (!result.length) return [];
-  const [{ columns, values }] = result;
-  return values.map((row) => {
+  const result = queryRows(
+    `SELECT cs.id, cs.campaign_id, cs.subscriber_id, cs.sent_at, cs.status, cs.error,
+            c.name as campaign_name, c.subject as campaign_subject
+     FROM campaign_sends cs
+     LEFT JOIN campaigns c ON c.id = cs.campaign_id
+     WHERE cs.subscriber_id = ?
+     ORDER BY cs.sent_at DESC
+     LIMIT 100`,
+    [subscriberId]
+  );
+  if (!result) return [];
+  return result.values.map((row) => {
     const obj: Record<string, unknown> = {};
-    columns.forEach((col, i) => { obj[col] = row[i]; });
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as CampaignSend;
   });
 }

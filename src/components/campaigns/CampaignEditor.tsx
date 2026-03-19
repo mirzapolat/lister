@@ -20,6 +20,10 @@ function markdownToHtml(md: string): string {
   return marked.parse(md) as string;
 }
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 const PREVIEW_TOKENS: Record<string, string> = {
   '{{name}}': 'Jane Smith',
   '{{first_name}}': 'Jane',
@@ -49,7 +53,7 @@ function buildEmailHtml(subject: string, body: string, _senderName: string, prev
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${subject}</title>
+<title>${escapeHtml(subject)}</title>
 <style>
   body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#374151;font-size:15px;line-height:1.7}
   .wrap{max-width:600px;margin:0 auto;padding:40px 24px}

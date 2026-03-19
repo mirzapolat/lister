@@ -18,7 +18,7 @@ function createTransporter(smtp: SmtpConfig) {
     secure: smtp.smtp_tls === 'true' ? Number(smtp.smtp_port) === 465 : false,
     auth: smtp.smtp_username ? { user: smtp.smtp_username, pass: smtp.smtp_password } : undefined,
     requireTLS: smtp.smtp_tls === 'true' && Number(smtp.smtp_port) !== 465,
-    tls: { rejectUnauthorized: false },
+    tls: { rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false' },
   });
 }
 

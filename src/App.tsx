@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { AlertCircle } from 'lucide-react';
 import {
   promptOpenFile, promptSaveNewFile, initSqlJs_,
@@ -18,6 +19,31 @@ import { ThemesPage } from './components/themes/ThemesPage';
 import type { Page } from './types';
 
 type AppStatus = 'loading' | 'welcome' | 'onboarding' | 'ready' | 'error';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error('Unhandled error:', error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="max-w-md text-center px-6">
+            <AlertCircle size={40} className="mx-auto mb-4 text-red-400" />
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Something went wrong</h1>
+            <p className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-4 py-3 font-mono">
+              {(this.state.error as Error).message}
+            </p>
+            <button onClick={() => this.setState({ error: null })} className="mt-4 text-sm text-indigo-600 hover:underline">
+              Try again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function useDarkMode() {
   const [dark, setDarkState] = useState(() => document.documentElement.classList.contains('dark'));
@@ -275,7 +301,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <ErrorBoundary>
       <input
         ref={fileInputRef}
         type="file"
@@ -294,6 +320,6 @@ export default function App() {
       >
         {renderPage()}
       </Layout>
-    </>
+    </ErrorBoundary>
   );
 }
