@@ -33,7 +33,7 @@ export function TestEmailModal({ subject, html, text, smtp, defaultEmail, onClos
     try {
       const personalizedHtml = applyTokens(html, email);
       const personalizedText = applyTokens(text, email);
-      const res = await fetch('http://localhost:3001/api/send', {
+      const res = await fetch('/api/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

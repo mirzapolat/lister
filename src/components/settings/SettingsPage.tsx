@@ -99,7 +99,7 @@ function ProviderModal({ provider, onClose, onSaved }: ProviderModalProps) {
     if (!email || !appPassword) { setError('Enter your email and app password first.'); return; }
     setTestStatus('testing'); setTestError('');
     try {
-      const res = await fetch('http://localhost:3001/api/test', {
+      const res = await fetch('/api/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ smtp: buildSmtp() }),
@@ -289,7 +289,7 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
     setTestStatus('testing');
     setTestError('');
     try {
-      const res = await fetch('http://localhost:3001/api/test', {
+      const res = await fetch('/api/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ smtp: senderProfileToSmtp({ ...form, id: 0, created_at: '' }) }),

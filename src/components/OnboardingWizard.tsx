@@ -718,7 +718,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     if (!email.trim() || !password.trim()) { setSenderError('Fill in your email and password first.'); return; }
     setTestStatus('testing'); setTestError(''); setSenderError('');
     try {
-      const res = await fetch('http://localhost:3001/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp }) });
+      const res = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ smtp }) });
       const data = await res.json();
       if (data.ok) { setTestStatus('ok'); setTimeout(() => setTestStatus('idle'), 3000); }
       else { setTestStatus('error'); setTestError(data.error ?? 'Connection failed'); }

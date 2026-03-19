@@ -6,7 +6,11 @@ export default defineConfig({
   optimizeDeps: {
     include: ['sql.js'],
   },
-  server: {},
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
+  },
   build: {
     rollupOptions: {
       external: [],

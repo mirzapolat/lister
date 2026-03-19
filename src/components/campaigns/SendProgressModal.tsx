@@ -44,7 +44,7 @@ async function sendOne(
   html: string,
   text: string,
 ): Promise<void> {
-  const base = 'http://localhost:3001';
+  const base = '';
   const personalizedHtml = applyTokens(html, contact);
   const personalizedText = applyTokens(text, contact);
   let res: Response;
