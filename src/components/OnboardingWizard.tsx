@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import {
   Database, Mail, List as ListIcon, Check, Server,
   KeyRound, ExternalLink, Eye, EyeOff, ArrowRight,
-  ChevronLeft, Wifi, CheckCircle,
+  ChevronLeft, Wifi, CheckCircle, AlertTriangle, Download,
+  Save, HardDrive, FolderOpen, RefreshCw,
 } from 'lucide-react';
-import { createSenderProfile, createList } from '../db/database';
+import { createSenderProfile, createList, hasFileSystemApi } from '../db/database';
 
 // ── Animations ────────────────────────────────────────────────────────────────
 
@@ -34,14 +35,28 @@ const KEYFRAMES = `
   from { stroke-dashoffset: 52; }
   to   { stroke-dashoffset: 0; }
 }
-@keyframes ob-shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
+@keyframes ob-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+  100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
 }
 `;
 
 function fu(delay = 0, duration = 0.45): React.CSSProperties {
   return { animation: `ob-fadeUp ${duration}s cubic-bezier(0.4,0,0.2,1) ${delay}s both` };
+}
+
+// ── Browser detection ─────────────────────────────────────────────────────────
+
+function detectBrowser(): string {
+  const ua = navigator.userAgent;
+  if (ua.includes('Edg/')) return 'Microsoft Edge';
+  if (ua.includes('OPR/') || ua.includes('Opera')) return 'Opera';
+  if (ua.includes('Brave') || (navigator as { brave?: { isBrave?: unknown } }).brave?.isBrave) return 'Brave';
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Safari') && !ua.includes('Chrome')) return 'Safari';
+  return 'your browser';
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -55,6 +70,13 @@ const PRESETS = {
 } as const;
 
 type ProviderKey = keyof typeof PRESETS;
+
+const CHROMIUM_BROWSERS = [
+  { name: 'Chrome', domain: 'chrome.google.com', url: 'https://www.google.com/chrome/' },
+  { name: 'Edge',   domain: 'microsoft.com',     url: 'https://www.microsoft.com/edge/' },
+  { name: 'Brave',  domain: 'brave.com',         url: 'https://brave.com/' },
+  { name: 'Arc',    domain: 'arc.net',            url: 'https://arc.net/' },
+];
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +96,204 @@ function StepNav({ onBack, backLabel = 'Back' }: { onBack?: () => void; backLabe
   );
 }
 
+// ── Step -1: Browser Warning ──────────────────────────────────────────────────
+
+const FEATURES: { label: string; chromium: string; other: string; chromiumOk: boolean }[] = [
+  { label: 'File saving',       chromium: 'Auto-saves directly to disk',  other: 'Manual download required',    chromiumOk: true  },
+  { label: 'Open recent file',  chromium: 'Reopens last file instantly',  other: 'Must re-open each session',   chromiumOk: true  },
+  { label: 'Data safety',       chromium: 'Changes never lost',           other: 'Close tab = lose unsaved work', chromiumOk: true },
+  { label: 'Filesystem access', chromium: 'Full File System Access API',  other: 'Not available',               chromiumOk: true  },
+];
+
+function BrowserWarningStep({ browserName, onContinue }: { browserName: string; onContinue: () => void }) {
+  return (
+    <div className="grid grid-cols-[1fr_1.5fr] gap-10 items-start">
+      {/* Left column */}
+      <div className="flex flex-col">
+        <div style={{ animation: 'ob-scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }} className="mb-7">
+          <div className="w-20 h-20 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center border-2 border-amber-200 dark:border-amber-700/50">
+            <AlertTriangle size={34} className="text-amber-500" />
+          </div>
+        </div>
+
+        <h2 style={fu(0.08)} className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Chromium browser recommended
+        </h2>
+        <p style={fu(0.14)} className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+          You're using <strong className="text-gray-700 dark:text-gray-300">{browserName}</strong>. Lister works, but some features are only available in Chrome, Edge, Brave, or Arc.
+        </p>
+
+        {/* Recommended browsers */}
+        <div style={fu(0.2)} className="mb-8">
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">Switch to a Chromium browser</p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {CHROMIUM_BROWSERS.map(({ name, domain, url }, i) => (
+              <a
+                key={name}
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                style={{ animationDelay: `${0.22 + i * 0.04}s` }}
+                className="flex items-center gap-2.5 px-3 py-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all group"
+              >
+                <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=24`} alt={name} className="w-5 h-5 rounded flex-shrink-0" />
+                <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 font-medium truncate">{name.split(' ')[0]}</span>
+                <ExternalLink size={11} className="text-gray-300 dark:text-gray-600 group-hover:text-indigo-400 ml-auto flex-shrink-0" />
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div style={fu(0.4)} className="flex flex-col gap-2 mt-8">
+          <button
+            onClick={onContinue}
+            className="flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
+          >
+            Continue with {browserName}
+            <ArrowRight size={15} />
+          </button>
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+            We'll show you how to save manually.
+          </p>
+        </div>
+      </div>
+
+      {/* Right column: feature comparison */}
+      <div style={fu(0.12)}>
+        {/* Column headers */}
+        <div className="grid grid-cols-2 mb-2">
+          <div className="flex items-center gap-2 px-4 py-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">Chromium</span>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">{browserName}</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
+          {FEATURES.map(({ label, chromium, other }, i) => (
+            <div key={label} style={fu(0.16 + i * 0.06)}>
+              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</span>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700">
+                <div className="px-4 py-4 bg-indigo-50/40 dark:bg-indigo-900/10 flex items-start gap-2">
+                  <CheckCircle size={14} className="text-indigo-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{chromium}</span>
+                </div>
+                <div className="px-4 py-4 flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400 leading-snug">{other}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 4: Save Tutorial (non-Chromium) ──────────────────────────────────────
+
+function SaveTutorialStep({ onComplete }: { onComplete: () => void }) {
+  const steps = [
+    { icon: <HardDrive size={16} className="text-indigo-400" />, title: 'Work normally in Lister', desc: 'Add subscribers, create campaigns, configure sender profiles — use Lister as you normally would.' },
+    { icon: <Save size={16} className="text-indigo-400" />, title: 'Click "Save" in the top bar', desc: 'Your browser downloads an updated .sqlite file with all your changes.' },
+    { icon: <FolderOpen size={16} className="text-indigo-400" />, title: 'Keep the file somewhere safe', desc: 'Documents or Desktop works well. Name it something clear like "lister.sqlite".' },
+    { icon: <RefreshCw size={16} className="text-indigo-400" />, title: 'Next session: open that file', desc: 'Click "Open existing file" on the start screen and pick your saved .sqlite file.' },
+  ];
+
+  return (
+    <div className="grid grid-cols-[1fr_1.4fr] gap-10 items-start">
+      {/* Left column */}
+      <div className="flex flex-col">
+        <div style={{ animation: 'ob-scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }} className="mb-7">
+          <div className="w-20 h-20 rounded-2xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center border-2 border-amber-200 dark:border-amber-700/50">
+            <Save size={34} className="text-amber-500" />
+          </div>
+        </div>
+
+        <h2 style={fu(0.08)} className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+          Save your work manually
+        </h2>
+        <p style={fu(0.14)} className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
+          Your browser doesn't support live file saving. You control when to save — follow the steps on the right.
+        </p>
+
+        {/* Warning */}
+        <div style={fu(0.2)} className="flex items-start gap-3 px-4 py-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 mb-8">
+          <AlertTriangle size={16} className="text-red-500 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 dark:text-red-300 leading-relaxed">
+            <strong>Closing this tab without saving permanently loses all unsaved changes.</strong> There is no auto-save.
+          </p>
+        </div>
+
+        <button
+          style={fu(0.3)}
+          onClick={onComplete}
+          className="mt-8 flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
+        >
+          Got it — open Lister
+          <ArrowRight size={15} />
+        </button>
+      </div>
+
+      {/* Right column: header mockup + steps */}
+      <div className="flex flex-col">
+        {/* Header mockup */}
+        <div style={fu(0.12)} className="mb-6">
+          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">The Save button</p>
+          <div className="rounded-xl border-2 border-indigo-200 dark:border-indigo-700 overflow-hidden shadow-md">
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-indigo-600 rounded-lg flex items-center justify-center">
+                  <Database size={12} className="text-white" />
+                </div>
+                <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">Lister</span>
+                <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-md ml-1">mylist.sqlite</span>
+              </div>
+              <div
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg"
+                style={{ animation: 'ob-pulse-ring 1.8s ease-out infinite' }}
+              >
+                <Download size={12} />
+                Save
+              </div>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-900 h-14 flex items-center justify-center">
+              <span className="text-xs text-gray-200 dark:text-gray-700">App content</span>
+            </div>
+          </div>
+          <p className="text-right text-sm text-indigo-500 font-medium mt-1.5 pr-1">↑ click this to save</p>
+        </div>
+
+        {/* Steps */}
+        <div className="flex flex-col gap-3">
+          {steps.map(({ icon, title, desc }, i) => (
+            <div
+              key={title}
+              style={fu(0.2 + i * 0.06)}
+              className="flex items-start gap-3.5 px-4 py-4 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50"
+            >
+              <div className="flex-shrink-0 w-7 h-7 bg-white dark:bg-gray-700 rounded-lg flex items-center justify-center border border-gray-100 dark:border-gray-600 shadow-sm">
+                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">{i + 1}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white mb-1">{title}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{desc}</p>
+              </div>
+              <div className="flex-shrink-0 opacity-40 mt-0.5">{icon}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Step 0: Welcome ───────────────────────────────────────────────────────────
 
 function WelcomeStep({ onNext }: { onNext: () => void }) {
@@ -85,7 +305,6 @@ function WelcomeStep({ onNext }: { onNext: () => void }) {
           <div className="absolute inset-0 flex items-center justify-center">
             <Database size={40} className="text-indigo-600 dark:text-indigo-400" />
           </div>
-          {/* Orbiting dots */}
           <div className="absolute -top-1 -right-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center" style={{ animation: 'ob-scaleIn 0.4s ease 0.4s both' }}>
             <Mail size={10} className="text-white" />
           </div>
@@ -202,7 +421,6 @@ function SenderStep(props: SenderStepProps) {
       {/* Form — appears when provider selected */}
       {provider && (
         <div key={provider} style={{ animation: 'ob-fadeUp 0.3s ease both' }} className="space-y-3">
-          {/* App password guide for presets */}
           {preset && (
             <div className="flex items-start gap-2.5 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/40 rounded-lg">
               <KeyRound size={13} className="text-amber-500 flex-shrink-0 mt-0.5" />
@@ -279,7 +497,6 @@ function SenderStep(props: SenderStepProps) {
             </>
           )}
 
-          {/* Test button */}
           <div className="flex items-center gap-2">
             <button
               onClick={props.onTest}
@@ -381,7 +598,7 @@ function ListStep({ listName, setListName, listDesc, setListDesc, onSave, onSkip
 
 // ── Step 3: Done ──────────────────────────────────────────────────────────────
 
-function DoneStep({ createdProfile, createdList, onComplete }: { createdProfile: string | null; createdList: string | null; onComplete: () => void }) {
+function DoneStep({ createdProfile, createdList, onNext }: { createdProfile: string | null; createdList: string | null; onNext: () => void }) {
   const items = [
     createdProfile ? { ok: true,  text: `Sender profile "${createdProfile}" created` } : { ok: false, text: 'No sender profile — add one in Sender Profiles' },
     createdList    ? { ok: true,  text: `List "${createdList}" created` }               : { ok: false, text: 'No list yet — create one in Lists' },
@@ -389,7 +606,6 @@ function DoneStep({ createdProfile, createdList, onComplete }: { createdProfile:
 
   return (
     <div className="text-center py-4">
-      {/* Animated checkmark */}
       <div className="flex items-center justify-center mb-8">
         <div style={{ animation: 'ob-ringGrow 0.55s cubic-bezier(0.34,1.56,0.64,1) both' }}
           className="w-24 h-24 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-300 dark:shadow-indigo-900/60"
@@ -432,7 +648,7 @@ function DoneStep({ createdProfile, createdList, onComplete }: { createdProfile:
 
       <button
         style={fu(0.54)}
-        onClick={onComplete}
+        onClick={onNext}
         className="w-full flex items-center justify-center gap-2.5 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm shadow-indigo-200 dark:shadow-indigo-900/40"
       >
         Open Lister
@@ -449,7 +665,11 @@ interface OnboardingWizardProps {
 }
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
-  const [step, setStep] = useState(0);
+  const isChromium = hasFileSystemApi();
+  const browserName = isChromium ? '' : detectBrowser();
+
+  // Steps: -1=browser-warn (non-chromium only), 0=welcome, 1=sender, 2=list, 3=done, 4=save-tutorial (non-chromium only)
+  const [step, setStep] = useState(isChromium ? 0 : -1);
   const [dir, setDir] = useState(1);
 
   // Sender state
@@ -528,9 +748,18 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     nav(3);
   };
 
+  // After Done: go to save tutorial for non-chromium, or complete for chromium
+  const afterDone = () => {
+    if (!isChromium) { nav(4); }
+    else { onComplete(); }
+  };
+
   const slideAnim: React.CSSProperties = {
     animation: `${dir >= 0 ? 'ob-slideRight' : 'ob-slideLeft'} 0.38s cubic-bezier(0.4,0,0.2,1) both`,
   };
+
+  // Which step numbers count as "setup steps" for the progress bar (1 and 2)
+  const showProgress = step === 1 || step === 2;
 
   return (
     <div className="fixed inset-0 bg-white dark:bg-gray-900 flex flex-col overflow-hidden">
@@ -545,7 +774,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           <span className="text-sm font-semibold text-gray-900 dark:text-white">Lister</span>
         </div>
 
-        {step > 0 && step < 3 && (
+        {showProgress && (
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-400 dark:text-gray-500">Step {step} of 2</span>
             <div className="flex gap-1.5">
@@ -559,11 +788,23 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             </div>
           </div>
         )}
+
+        {/* Non-chromium indicator on save-tutorial step */}
+        {step === 4 && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50">
+            <AlertTriangle size={11} className="text-amber-500" />
+            <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Manual save required</span>
+          </div>
+        )}
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto flex items-start justify-center px-4 py-12">
-        <div key={step} style={slideAnim} className="w-full max-w-md">
+      <div className={`flex-1 overflow-y-auto flex justify-center ${step === -1 || step === 4 ? 'items-center px-8 py-8' : 'items-start px-4 py-12'}`}>
+        <div key={step} style={slideAnim} className={`w-full ${step === -1 || step === 4 ? 'max-w-3xl' : 'max-w-md'}`}>
+          {step === -1 && (
+            <BrowserWarningStep browserName={browserName} onContinue={() => nav(0)} />
+          )}
+
           {step === 0 && <WelcomeStep onNext={() => nav(1)} />}
 
           {step === 1 && (
@@ -591,7 +832,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               listName={listName} setListName={setListName}
               listDesc={listDesc} setListDesc={setListDesc}
               onSave={saveList}
-              onSkip={() => { nav(3); }}
+              onSkip={() => nav(3)}
               onBack={() => nav(1, -1)}
             />
           )}
@@ -600,8 +841,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             <DoneStep
               createdProfile={createdProfile}
               createdList={createdList}
-              onComplete={onComplete}
+              onNext={afterDone}
             />
+          )}
+
+          {step === 4 && (
+            <SaveTutorialStep onComplete={onComplete} />
           )}
         </div>
       </div>
