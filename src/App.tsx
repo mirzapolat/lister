@@ -7,13 +7,14 @@ import {
   getStoredFileHandle, openDatabaseFromFile, closeDatabase,
 } from './db/database';
 import { Layout } from './components/Layout';
+import { SettingsProvider } from './context/SettingsContext';
 import { LandingPage } from './components/LandingPage';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { ListsPage } from './components/lists/ListsPage';
 import { ListDetailPage } from './components/lists/ListDetailPage';
 import { CampaignsPage } from './components/campaigns/CampaignsPage';
 import { CampaignEditor } from './components/campaigns/CampaignEditor';
-import { SettingsPage } from './components/settings/SettingsPage';
+import { SettingsPage, SenderProfilesPage } from './components/settings/SettingsPage';
 import { SubscribersPage } from './components/subscribers/SubscribersPage';
 import { ThemesPage } from './components/themes/ThemesPage';
 import { TemplatesPage } from './components/templates/TemplatesPage';
@@ -46,24 +47,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-function useDarkMode() {
-  const [dark, setDarkState] = useState(() => document.documentElement.classList.contains('dark'));
-  const setDark = (next: boolean) => {
-    if (next) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('lister-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('lister-theme', 'light');
-    }
-    setDarkState(next);
-  };
-  return [dark, setDark] as const;
-}
-
 export default function App() {
   const [status, setStatus] = useState<AppStatus>('loading');
-  const [dark, setDark] = useDarkMode();
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [recentFileName, setRecentFileName] = useState(() => localStorage.getItem('lister-recent-filename') ?? '');
@@ -310,12 +295,15 @@ export default function App() {
         );
       case 'settings':
         return <SettingsPage />;
+      case 'sender-profiles':
+        return <SenderProfilesPage />;
       default:
         return null;
     }
   };
 
   return (
+    <SettingsProvider>
     <ErrorBoundary>
       <input
         ref={fileInputRef}
@@ -330,11 +318,10 @@ export default function App() {
         onNavigate={navigate}
         onSave={!fsApi ? handleSave : undefined}
         onUnload={handleUnload}
-        dark={dark}
-        onToggleDark={() => setDark(!dark)}
       >
         {renderPage()}
       </Layout>
     </ErrorBoundary>
+    </SettingsProvider>
   );
 }

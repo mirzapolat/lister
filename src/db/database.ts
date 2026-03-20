@@ -1062,6 +1062,73 @@ export function duplicateTemplate(id: number): number {
   });
 }
 
+// ── Bulk wipe ─────────────────────────────────────────────────────────────────
+
+export function wipeAllCampaigns(): void {
+  getDb().run('DELETE FROM campaigns');
+  saveDatabase();
+}
+
+export function wipeAllSubscribers(): void {
+  getDb().run('DELETE FROM subscribers');
+  saveDatabase();
+}
+
+export function resetAllData(): void {
+  const d = getDb();
+  d.run('DELETE FROM campaigns');
+  d.run('DELETE FROM campaign_sends');
+  d.run('DELETE FROM subscribers');
+  d.run('DELETE FROM list_subscribers');
+  d.run('DELETE FROM subscriber_tags');
+  d.run('DELETE FROM lists');
+  d.run('DELETE FROM contacts');
+  d.run('DELETE FROM contact_tags');
+  d.run('DELETE FROM import_history');
+  d.run('DELETE FROM bounces');
+  saveDatabase();
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+function queryAllRows(sql: string): Record<string, unknown>[] {
+  const result = getDb().exec(sql);
+  if (!result.length) return [];
+  const { columns, values } = result[0];
+  return values.map((row) => Object.fromEntries(columns.map((c, i) => [c, row[i]])));
+}
+
+export function exportAllData(): object {
+  return {
+    exported_at: new Date().toISOString(),
+    version: 1,
+    campaigns: queryAllRows('SELECT id,name,subject,body,status,created_at,sent_at FROM campaigns'),
+    lists: queryAllRows('SELECT * FROM lists'),
+    subscribers: queryAllRows('SELECT * FROM subscribers'),
+    list_subscribers: queryAllRows('SELECT * FROM list_subscribers'),
+    subscriber_tags: queryAllRows('SELECT * FROM subscriber_tags'),
+    templates: queryAllRows('SELECT * FROM templates WHERE is_builtin=0'),
+    themes: queryAllRows('SELECT * FROM themes WHERE is_builtin=0'),
+    bounces: queryAllRows('SELECT * FROM bounces'),
+  };
+}
+
+export function exportSubscribersCSV(): string {
+  const rows = queryAllRows(
+    `SELECT s.email, s.name, s.created_at,
+     GROUP_CONCAT(DISTINCT st.tag) AS tags,
+     GROUP_CONCAT(DISTINCT l.name) AS lists
+     FROM subscribers s
+     LEFT JOIN subscriber_tags st ON st.subscriber_id = s.id
+     LEFT JOIN list_subscribers ls ON ls.subscriber_id = s.id
+     LEFT JOIN lists l ON l.id = ls.list_id
+     GROUP BY s.id`
+  );
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const headers = ['email', 'name', 'created_at', 'tags', 'lists'];
+  return [headers.join(','), ...rows.map((r) => headers.map((h) => esc(r[h])).join(','))].join('\n');
+}
+
 export function seedBuiltinTemplates(): void {
   const database = getDb();
   for (const t of BUILTIN_TEMPLATES) {

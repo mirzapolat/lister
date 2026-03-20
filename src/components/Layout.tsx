@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { List, Users, Send, Radio, Download, Moon, Sun, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen } from 'lucide-react';
+import { List, Users, Send, Settings, Radio, Download, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen } from 'lucide-react';
 import type { Page } from '../types';
 
 interface NavChild {
@@ -27,10 +27,11 @@ const navItems: NavItem[] = [
       { id: 'themes', label: 'Themes', icon: <Palette size={15} /> },
     ],
   },
-  { id: 'settings', label: 'Sender Profiles', icon: <Radio size={18} /> },
+  { id: 'sender-profiles', label: 'Sender Profiles', icon: <Radio size={18} /> },
+  { id: 'settings', label: 'Settings', icon: <Settings size={18} /> },
 ];
 
-const topLevelPages: Page[] = ['lists', 'subscribers', 'campaigns', 'themes', 'templates', 'settings'];
+const topLevelPages: Page[] = ['lists', 'subscribers', 'campaigns', 'themes', 'templates', 'sender-profiles', 'settings'];
 
 function getParentId(page: Page): Page | null {
   for (const item of navItems) {
@@ -57,8 +58,6 @@ interface LayoutProps {
   onNavigate: (page: Page) => void;
   onSave?: () => void;
   onUnload?: () => void;
-  dark: boolean;
-  onToggleDark: () => void;
   children: React.ReactNode;
 }
 
@@ -72,7 +71,7 @@ function useCollapsed() {
   return [collapsed, toggle] as const;
 }
 
-export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, dark, onToggleDark, children }: LayoutProps) {
+export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, children }: LayoutProps) {
   const [collapsed, toggleCollapsed] = useCollapsed();
   const [openSections, setOpenSections] = useState<Set<Page>>(loadOpenSections);
 
@@ -217,16 +216,6 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, da
               {!collapsed && 'Save file'}
             </button>
           )}
-
-          <button
-            onClick={onToggleDark}
-            title={dark ? 'Light mode' : 'Dark mode'}
-            className={`w-full flex items-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 text-sm transition-colors
-              ${collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2'}`}
-          >
-            {dark ? <Sun size={14} /> : <Moon size={14} />}
-            {!collapsed && (dark ? 'Light mode' : 'Dark mode')}
-          </button>
 
           {onUnload && (
             <button

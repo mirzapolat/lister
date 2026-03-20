@@ -35,3 +35,11 @@
   height: 100% !important;
   overflow-y: auto !important;
 }
+
+/* Global editor font size — controlled via Settings */
+.w-md-editor-text-input,
+.w-md-editor-text-pre > code {
+  font-size: var(--editor-font-size, 15px) !important;
+  line-height: 1.6 !important;
+}
+

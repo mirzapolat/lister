@@ -47,7 +47,7 @@ export interface Subscriber {
   tags?: string; // comma-joined
 }
 
-export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'subscribers' | 'themes' | 'templates';
+export type Page = 'lists' | 'list-detail' | 'campaigns' | 'campaign-editor' | 'settings' | 'sender-profiles' | 'subscribers' | 'themes' | 'templates';
 
 export interface EmailTemplate {
   id: number;
