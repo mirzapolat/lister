@@ -6,6 +6,9 @@ import {
   hasFileSystemApi, openDatabaseFromFileInput, createNewDatabaseFallback, downloadDatabase,
   getStoredFileHandle, openDatabaseFromFile, closeDatabase,
 } from './db/database';
+import type { OpenResult } from './db/database';
+import type { EncryptionMethod } from './db/crypto';
+import { PasswordPrompt } from './components/ui/PasswordPrompt';
 import { Layout } from './components/Layout';
 import { SettingsProvider } from './context/SettingsContext';
 import { LandingPage } from './components/LandingPage';
@@ -56,8 +59,21 @@ export default function App() {
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const [templateToLoad, setTemplateToLoad] = useState<EmailTemplate | null>(null);
+  const [pendingAuth, setPendingAuth] = useState<{
+    method: EncryptionMethod; salt: Uint8Array; fileName: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fsApi = hasFileSystemApi();
+
+  const handleOpenResult = (result: OpenResult) => {
+    if (result.status === 'needs-auth') {
+      setPendingAuth({ method: result.method, salt: result.salt, fileName: result.fileName });
+      return false; // caller should not set status='ready'
+    }
+    setFileName(result.fileName);
+    saveRecentFile(result.fileName);
+    return true;
+  };
 
   const saveRecentFile = (name: string) => {
     localStorage.setItem('lister-recent-filename', name);
@@ -76,9 +92,14 @@ export default function App() {
               ? 'granted'
               : await h.requestPermission({ mode: 'readwrite' });
             if (granted === 'granted') {
-              await openDatabaseFromFile(handle);
-              setFileName(handle.name);
-              saveRecentFile(handle.name);
+              const result = await openDatabaseFromFile(handle);
+              if (result.status === 'needs-auth') {
+                setStatus('welcome');
+                setPendingAuth({ method: result.method, salt: result.salt, fileName: result.fileName });
+                return;
+              }
+              setFileName(result.fileName);
+              saveRecentFile(result.fileName);
               setStatus('ready');
               return;
             }
@@ -98,8 +119,7 @@ export default function App() {
       setError('');
       const result = await promptOpenFile();
       if (!result) return;
-      setFileName(result.fileName);
-      saveRecentFile(result.fileName);
+      if (!handleOpenResult(result)) return;
       setStatus('ready');
     } catch (e) {
       setError(String(e));
@@ -118,9 +138,8 @@ export default function App() {
           ? 'granted'
           : await h.requestPermission({ mode: 'readwrite' });
         if (granted === 'granted') {
-          await openDatabaseFromFile(handle);
-          setFileName(handle.name);
-          saveRecentFile(handle.name);
+          const result = await openDatabaseFromFile(handle);
+          if (!handleOpenResult(result)) return;
           setStatus('ready');
           return;
         }
@@ -140,8 +159,7 @@ export default function App() {
     try {
       setError('');
       const result = await openDatabaseFromFileInput(file);
-      setFileName(result.fileName);
-      saveRecentFile(result.fileName);
+      if (!handleOpenResult(result)) return;
       setStatus('ready');
     } catch (e) {
       setError(String(e));
@@ -181,6 +199,7 @@ export default function App() {
     setSelectedListId(null);
     setSelectedCampaignId(null);
     setTemplateToLoad(null);
+    setPendingAuth(null);
   };
 
   const navigate = (p: Page) => {
@@ -224,16 +243,32 @@ export default function App() {
 
   if (status === 'welcome') {
     return (
-      <LandingPage
-        onOpenFile={handleOpenFile}
-        onNewFile={handleNewFile}
-        onOpenRecent={recentFileName && fsApi ? handleOpenRecent : undefined}
-        recentFileName={recentFileName}
-        error={error}
-        fsApi={fsApi}
-        fileInputRef={fileInputRef}
-        onFileInputChange={handleFileInputChange}
-      />
+      <>
+        <LandingPage
+          onOpenFile={handleOpenFile}
+          onNewFile={handleNewFile}
+          onOpenRecent={recentFileName && fsApi ? handleOpenRecent : undefined}
+          recentFileName={recentFileName}
+          error={error}
+          fsApi={fsApi}
+          fileInputRef={fileInputRef}
+          onFileInputChange={handleFileInputChange}
+        />
+        {pendingAuth && (
+          <PasswordPrompt
+            method={pendingAuth.method}
+            salt={pendingAuth.salt}
+            fileName={pendingAuth.fileName}
+            onSuccess={(result) => {
+              setFileName(result.fileName);
+              saveRecentFile(result.fileName);
+              setPendingAuth(null);
+              setStatus('ready');
+            }}
+            onCancel={() => setPendingAuth(null)}
+          />
+        )}
+      </>
     );
   }
 

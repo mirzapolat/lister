@@ -3,11 +3,38 @@ import { SCHEMA_SQL, MIGRATION_SQL } from './schema';
 import type { List, Contact, Campaign, SmtpSettings, ImportHistory, Bounce, Subscriber, SenderProfile, CampaignSend, EmailTheme, EmailTemplate } from '../types';
 import { BUILTIN_THEMES } from '../themes/builtinThemes';
 import { BUILTIN_TEMPLATES } from '../themes/builtinTemplates';
+import {
+  isEncryptedFile, readEncryptionHeader, encryptBytes, decryptBytes,
+  EncryptionMethod, storePasskeyCredentialId, clearPasskeyCredentialId,
+} from './crypto';
 
 let SQL: SqlJsStatic | null = null;
 let db: Database | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let fallbackFileName = 'lister.sqlite';
+
+// ── In-memory encryption state ────────────────────────────────────────────────
+let encryptionKey: CryptoKey | null = null;
+// For password method: the PBKDF2 salt stored in the file header (reused on save).
+// For passkey method:  null (salt field in header is always zero bytes).
+let encryptionSalt: Uint8Array | null = null;
+let encryptionMethod: EncryptionMethod | null = null;
+
+// ── Pending encrypted-file open ───────────────────────────────────────────────
+// When an encrypted file is opened, we stash the raw bytes and handle here until
+// the user provides the password/passkey and completePendingOpenWithKey() is called.
+let pendingFileBytes: Uint8Array | null = null;
+let pendingHandle: FileSystemFileHandle | null = null;
+let pendingFileName: string | null = null;
+
+// ── Open result type ──────────────────────────────────────────────────────────
+export type OpenResult =
+  | { status: 'ok'; db: Database; fileName: string }
+  | { status: 'needs-auth'; method: EncryptionMethod; salt: Uint8Array; fileName: string };
+
+// ── Encryption state queries ──────────────────────────────────────────────────
+export function isEncrypted(): boolean { return encryptionKey !== null; }
+export function getEncryptionMethod(): EncryptionMethod | null { return encryptionMethod; }
 
 // ── IndexedDB helpers for persisting the file handle across reloads ──
 
@@ -50,6 +77,12 @@ export async function clearStoredFileHandle(): Promise<void> {
 export function closeDatabase(): void {
   if (db) { db.close(); db = null; }
   fileHandle = null;
+  encryptionKey = null;
+  encryptionSalt = null;
+  encryptionMethod = null;
+  pendingFileBytes = null;
+  pendingHandle = null;
+  pendingFileName = null;
 }
 
 export function hasFileSystemApi(): boolean {
@@ -78,15 +111,12 @@ export async function createNewDatabase(): Promise<Database> {
   return db;
 }
 
-export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promise<Database> {
-  const sql = await initSqlJs_();
-  const file = await handle.getFile();
-  const buffer = await file.arrayBuffer();
-  db = new sql.Database(new Uint8Array(buffer));
+// Private helper: run schema/migration/seed on an already-loaded db instance.
+async function initializeLoadedDb(): Promise<void> {
+  if (!db) throw new Error('No database loaded');
   db.run("PRAGMA foreign_keys = ON;");
-  fileHandle = handle;
   db.run(SCHEMA_SQL);
-  // Add columns that may be missing from older databases
+  // Back-fill columns that may be missing from older databases.
   const spCols = db.exec("SELECT name FROM pragma_table_info('sender_profiles')");
   const spColNames = spCols[0]?.values.map((r) => r[0]) ?? [];
   if (!spColNames.includes('rate_limit_ms')) {
@@ -103,15 +133,70 @@ export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promis
   db.run(MIGRATION_SQL);
   seedBuiltinThemes();
   seedBuiltinTemplates();
+}
+
+export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promise<OpenResult> {
+  await initSqlJs_();
+  const file = await handle.getFile();
+  const rawBytes = new Uint8Array(await file.arrayBuffer());
+
+  if (isEncryptedFile(rawBytes)) {
+    const header = readEncryptionHeader(rawBytes);
+    pendingFileBytes = rawBytes;
+    pendingHandle = handle;
+    pendingFileName = handle.name;
+    return { status: 'needs-auth', method: header.method, salt: header.salt, fileName: handle.name };
+  }
+
+  const sql = await initSqlJs_();
+  db = new sql.Database(rawBytes);
+  fileHandle = handle;
+  await initializeLoadedDb();
   await storeFileHandleInIDB(handle);
-  return db;
+  return { status: 'ok', db, fileName: handle.name };
+}
+
+// Called from App after the user supplies their password or passkey key.
+export async function completePendingOpenWithKey(
+  key: CryptoKey,
+  method: EncryptionMethod,
+): Promise<{ db: Database; fileName: string }> {
+  if (!pendingFileBytes || !pendingFileName) throw new Error('No pending file to open.');
+  const sql = await initSqlJs_();
+
+  const decryptedBytes = await decryptBytes(pendingFileBytes, key); // throws on wrong password
+
+  db = new sql.Database(decryptedBytes);
+  fileHandle = pendingHandle;
+  const fileName = pendingFileName;
+
+  const header = readEncryptionHeader(pendingFileBytes);
+  encryptionKey = key;
+  encryptionMethod = method;
+  encryptionSalt = method === 'password' ? header.salt : null;
+
+  pendingFileBytes = null;
+  pendingHandle = null;
+  pendingFileName = null;
+
+  await initializeLoadedDb();
+  if (fileHandle) await storeFileHandleInIDB(fileHandle);
+  else fallbackFileName = fileName;
+
+  return { db, fileName };
 }
 
 export async function saveDatabase(): Promise<void> {
   if (!db) return;
   if (!fileHandle) return; // fallback mode: skip auto-save, user downloads manually
   const data = db.export();
-  const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/x-sqlite3' });
+  let bytes: Uint8Array<ArrayBuffer> | ArrayBuffer;
+  if (encryptionKey && encryptionMethod) {
+    bytes = await encryptBytes(data, encryptionKey, encryptionMethod, encryptionSalt ?? undefined);
+  } else {
+    bytes = data.buffer as ArrayBuffer;
+  }
+  const blob = new Blob([bytes], { type: 'application/x-sqlite3' });
   const writable = await fileHandle.createWritable();
   await writable.write(blob);
   await writable.close();
@@ -120,7 +205,13 @@ export async function saveDatabase(): Promise<void> {
 export async function downloadDatabase(): Promise<void> {
   if (!db) return;
   const data = db.export();
-  const blob = new Blob([data.buffer as ArrayBuffer], { type: 'application/x-sqlite3' });
+  let bytes: Uint8Array<ArrayBuffer> | ArrayBuffer;
+  if (encryptionKey && encryptionMethod) {
+    bytes = await encryptBytes(data, encryptionKey, encryptionMethod, encryptionSalt ?? undefined);
+  } else {
+    bytes = data.buffer as ArrayBuffer;
+  }
+  const blob = new Blob([bytes], { type: 'application/x-sqlite3' });
 
   if (hasFileSystemApi()) {
     try {
@@ -150,18 +241,24 @@ export async function downloadDatabase(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export async function openDatabaseFromFileInput(file: File): Promise<{ db: Database; fileName: string }> {
+export async function openDatabaseFromFileInput(file: File): Promise<OpenResult> {
+  await initSqlJs_();
+  const rawBytes = new Uint8Array(await file.arrayBuffer());
+
+  if (isEncryptedFile(rawBytes)) {
+    const header = readEncryptionHeader(rawBytes);
+    pendingFileBytes = rawBytes;
+    pendingHandle = null;
+    pendingFileName = file.name;
+    return { status: 'needs-auth', method: header.method, salt: header.salt, fileName: file.name };
+  }
+
   const sql = await initSqlJs_();
-  const buffer = await file.arrayBuffer();
-  db = new sql.Database(new Uint8Array(buffer));
-  db.run("PRAGMA foreign_keys = ON;");
-  db.run(SCHEMA_SQL);
-  db.run(MIGRATION_SQL);
-  seedBuiltinThemes();
-  seedBuiltinTemplates();
-  fallbackFileName = file.name;
+  db = new sql.Database(rawBytes);
   fileHandle = null;
-  return { db, fileName: file.name };
+  fallbackFileName = file.name;
+  await initializeLoadedDb();
+  return { status: 'ok', db, fileName: file.name };
 }
 
 export async function createNewDatabaseFallback(name = 'lister.sqlite'): Promise<{ db: Database; fileName: string }> {
@@ -171,7 +268,7 @@ export async function createNewDatabaseFallback(name = 'lister.sqlite'): Promise
   return { db: newDb, fileName: name };
 }
 
-export async function promptOpenFile(): Promise<{ db: Database; fileName: string } | null> {
+export async function promptOpenFile(): Promise<OpenResult | null> {
   if (!window.showOpenFilePicker) {
     throw new Error('File System Access API is not supported in this browser. Please use Chrome or Edge.');
   }
@@ -179,9 +276,7 @@ export async function promptOpenFile(): Promise<{ db: Database; fileName: string
     const [handle] = await window.showOpenFilePicker({
       types: [{ description: 'SQLite Database', accept: { 'application/x-sqlite3': ['.sqlite', '.db'] } }],
     });
-    fileHandle = handle;
-    const openedDb = await openDatabaseFromFile(handle);
-    return { db: openedDb, fileName: handle.name };
+    return openDatabaseFromFile(handle);
   } catch (e: unknown) {
     if (e instanceof Error && e.name === 'AbortError') return null;
     throw e;
@@ -211,6 +306,42 @@ export async function promptSaveNewFile(): Promise<{ db: Database; fileName: str
 export function getDb(): Database {
   if (!db) throw new Error('Database not initialized');
   return db;
+}
+
+// ── Encryption management (called from Settings) ──────────────────────────────
+
+export async function enableEncryptionPassword(password: string): Promise<void> {
+  if (!db) throw new Error('No database loaded');
+  const { deriveKeyFromPassword } = await import('./crypto');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveKeyFromPassword(password, salt);
+  encryptionKey = key;
+  encryptionMethod = 'password';
+  encryptionSalt = salt;
+  await saveDatabase();
+  // In fallback (no FSA) mode saveDatabase() is a no-op; the next download will be encrypted.
+}
+
+export async function enableEncryptionPasskey(credentialId: Uint8Array, key: CryptoKey): Promise<void> {
+  if (!db) throw new Error('No database loaded');
+  const fileName = fileHandle?.name ?? fallbackFileName;
+  await storePasskeyCredentialId(fileName, credentialId);
+  encryptionKey = key;
+  encryptionMethod = 'passkey';
+  encryptionSalt = null;
+  await saveDatabase();
+}
+
+export async function disableEncryption(): Promise<void> {
+  if (!db) throw new Error('No database loaded');
+  const fileName = fileHandle?.name ?? fallbackFileName;
+  if (encryptionMethod === 'passkey') {
+    await clearPasskeyCredentialId(fileName);
+  }
+  encryptionKey = null;
+  encryptionMethod = null;
+  encryptionSalt = null;
+  await saveDatabase();
 }
 
 // ── Parameterized query helpers (use instead of string interpolation) ─────────

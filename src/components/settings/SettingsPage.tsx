@@ -1,14 +1,16 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star, Search, X, ExternalLink, KeyRound, ChevronUp, ChevronDown, Type, AlertTriangle, Download, FileJson, FileText } from 'lucide-react';
+import { useState, useEffect, useMemo, FormEvent } from 'react';
+import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star, Search, X, ExternalLink, KeyRound, ChevronUp, ChevronDown, Type, AlertTriangle, Download, FileJson, FileText, ShieldCheck, Fingerprint, Eye, EyeOff, ShieldOff } from 'lucide-react';
 import { useSettings } from '../../context/SettingsContext';
 import { exportAllData, exportSubscribersCSV, wipeAllCampaigns, wipeAllSubscribers, resetAllData } from '../../db/database';
 import {
   getSenderProfiles, createSenderProfile, updateSenderProfile, deleteSenderProfile,
-  senderProfileToSmtp,
+  senderProfileToSmtp, isEncrypted, getEncryptionMethod,
+  enableEncryptionPassword, enableEncryptionPasskey, disableEncryption, getFileName,
 } from '../../db/database';
 import type { SenderProfile } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
+import { createPasskeyCredential, isPasskeySupported } from '../../db/crypto';
 
 // ── SMTP presets ──────────────────────────────────────────────────────────────
 
@@ -792,6 +794,301 @@ export function SenderProfilesPage() {
   );
 }
 
+// ── Security Section ──────────────────────────────────────────────────────────
+
+function SecuritySection() {
+  const [encrypted, setEncrypted] = useState(isEncrypted);
+  const [method, setMethod] = useState(getEncryptionMethod);
+
+  // Password modal state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+
+  // Remove encryption modal state
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
+  const [removeLoading, setRemoveLoading] = useState(false);
+
+  // Passkey state
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyError, setPasskeyError] = useState('');
+
+  // General success/error message
+  const [message, setMessage] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+
+  const refresh = () => {
+    setEncrypted(isEncrypted());
+    setMethod(getEncryptionMethod());
+  };
+
+  const inputClass = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white';
+
+  // ── Set / change password ────────────────────────────────────────────────
+
+  const handlePasswordSave = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newPassword) { setPwError('Enter a password.'); return; }
+    if (newPassword !== confirmPassword) { setPwError('Passwords do not match.'); return; }
+    if (newPassword.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
+    setPwLoading(true);
+    setPwError('');
+    try {
+      await enableEncryptionPassword(newPassword);
+      setMessage({ type: 'ok', text: 'File is now encrypted with your password.' });
+      setShowPasswordModal(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      refresh();
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Failed to set password.');
+    } finally {
+      setPwLoading(false);
+    }
+  };
+
+  // ── Set passkey ───────────────────────────────────────────────────────────
+
+  const handleSetPasskey = async () => {
+    setPasskeyLoading(true);
+    setPasskeyError('');
+    setMessage(null);
+    try {
+      const { credentialId, key } = await createPasskeyCredential(getFileName());
+      await enableEncryptionPasskey(credentialId, key);
+      setMessage({ type: 'ok', text: 'File is now encrypted with your passkey.' });
+      refresh();
+    } catch (err) {
+      setPasskeyError(err instanceof Error ? err.message : 'Failed to set up passkey.');
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  // ── Remove encryption ─────────────────────────────────────────────────────
+
+  const handleRemove = async () => {
+    setRemoveLoading(true);
+    try {
+      await disableEncryption();
+      setMessage({ type: 'ok', text: 'Encryption removed. File is now saved unencrypted.' });
+      setShowRemoveModal(false);
+      refresh();
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove encryption.' });
+    } finally {
+      setRemoveLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-lg space-y-8">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">File Security</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Encrypt your database file so it can only be opened with a password or passkey.
+          The key is only held in memory while the file is open — closing the tab locks it.
+        </p>
+      </div>
+
+      {message && (
+        <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm ${
+          message.type === 'ok'
+            ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+            : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+        }`}>
+          {message.type === 'ok' ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+          {message.text}
+          <button onClick={() => setMessage(null)} className="ml-auto opacity-60 hover:opacity-100"><X size={13} /></button>
+        </div>
+      )}
+
+      {/* Current status */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+          encrypted ? 'bg-indigo-100 dark:bg-indigo-900/40' : 'bg-gray-100 dark:bg-gray-700'
+        }`}>
+          {encrypted
+            ? <Lock size={15} className="text-indigo-600 dark:text-indigo-400" />
+            : <ShieldOff size={15} className="text-gray-400" />
+          }
+        </div>
+        <div>
+          <p className="text-sm font-medium text-gray-900 dark:text-white">
+            {encrypted
+              ? method === 'passkey' ? 'Encrypted with passkey' : 'Encrypted with password'
+              : 'Not encrypted'}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {encrypted
+              ? 'The file on disk is encrypted. A key is required to open it.'
+              : 'The file is stored as plain SQLite — anyone with the file can read it.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Password option */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Password encryption</label>
+        <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div>
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+              {encrypted && method === 'password' ? 'Change password' : 'Set password'}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Encrypts the file with AES-256 derived from your password via PBKDF2.
+            </p>
+          </div>
+          <Button variant="secondary" onClick={() => { setShowPasswordModal(true); setMessage(null); }}>
+            <Lock size={14} />
+            {encrypted && method === 'password' ? 'Change' : 'Set password'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Passkey option */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Passkey encryption</label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                {encrypted && method === 'passkey' ? 'Change passkey' : 'Set passkey'}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Uses Touch ID, Windows Hello, or a hardware key. No password to remember.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleSetPasskey}
+              disabled={!isPasskeySupported() || passkeyLoading}
+            >
+              {passkeyLoading
+                ? <span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                : <Fingerprint size={14} />
+              }
+              {encrypted && method === 'passkey' ? 'Change' : 'Set passkey'}
+            </Button>
+          </div>
+          {!isPasskeySupported() && (
+            <p className="text-xs text-gray-400 dark:text-gray-500 px-1">
+              Passkeys are not supported in this browser. Use Chrome or Edge.
+            </p>
+          )}
+          {passkeyError && (
+            <p className="text-xs text-red-600 dark:text-red-400 px-1">{passkeyError}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Remove encryption */}
+      {encrypted && (
+        <div>
+          <label className="block text-sm font-medium text-red-600 dark:text-red-400 mb-3">Remove encryption</label>
+          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-red-200 dark:border-red-900/50">
+            <div>
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Remove encryption</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Saves the file unencrypted. Anyone with access to the file will be able to read it.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowRemoveModal(true)}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <ShieldOff size={13} />
+              Remove
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Informational note */}
+      <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/40">
+        <AlertTriangle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+          <strong>If you forget your password or lose your passkey, the file cannot be recovered.</strong>{' '}
+          Keep a backup of your unencrypted file if needed.
+        </p>
+      </div>
+
+      {/* Set/change password modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => { setShowPasswordModal(false); setNewPassword(''); setConfirmPassword(''); setPwError(''); }}
+        title={encrypted && method === 'password' ? 'Change password' : 'Set password'}
+        size="sm"
+      >
+        <form onSubmit={handlePasswordSave} className="space-y-4">
+          {pwError && (
+            <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{pwError}</div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">New password</label>
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setPwError(''); }}
+                placeholder="At least 8 characters"
+                autoFocus
+                className={`${inputClass} pr-10`}
+              />
+              <button type="button" onClick={() => setShowPw((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                tabIndex={-1}
+              >
+                {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirm password</label>
+            <input
+              type={showPw ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => { setConfirmPassword(e.target.value); setPwError(''); }}
+              placeholder="Repeat password"
+              className={inputClass}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-1">
+            <Button variant="secondary" type="button" onClick={() => { setShowPasswordModal(false); setNewPassword(''); setConfirmPassword(''); setPwError(''); }}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={pwLoading}>
+              {pwLoading
+                ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <ShieldCheck size={14} />
+              }
+              {encrypted && method === 'password' ? 'Change password' : 'Set password'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Remove encryption confirmation */}
+      <Modal isOpen={showRemoveModal} onClose={() => setShowRemoveModal(false)} title="Remove encryption" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            The file will be saved without encryption. Anyone with access to the file will be able to read it.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowRemoveModal(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleRemove} disabled={removeLoading}>
+              {removeLoading ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+              Remove encryption
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
 // ── Appearance Section ────────────────────────────────────────────────────────
 
 import React from 'react';
@@ -1025,12 +1322,13 @@ function DataSection() {
 
 // ── Settings Page (top-level) ─────────────────────────────────────────────────
 
-type SettingsSection = 'appearance' | 'editor' | 'data';
+type SettingsSection = 'appearance' | 'editor' | 'data' | 'security';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <Sun size={15} /> },
   { id: 'editor',     label: 'Editor',     icon: <Type size={15} /> },
   { id: 'data',       label: 'Data',       icon: <Download size={15} /> },
+  { id: 'security',   label: 'Security',   icon: <Lock size={15} /> },
 ];
 
 export function SettingsPage() {
@@ -1062,6 +1360,7 @@ export function SettingsPage() {
         {section === 'appearance' && <AppearanceSection />}
         {section === 'editor' && <EditorSection />}
         {section === 'data' && <DataSection />}
+        {section === 'security' && <SecuritySection />}
       </div>
     </div>
   );
