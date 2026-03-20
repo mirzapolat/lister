@@ -73,7 +73,7 @@ type ProviderKey = keyof typeof PRESETS;
 
 const CHROMIUM_BROWSERS = [
   { name: 'Chrome', domain: 'chrome.google.com', url: 'https://www.google.com/chrome/' },
-  { name: 'Edge',   domain: 'microsoft.com',     url: 'https://www.microsoft.com/edge/' },
+  { name: 'Edge',   domain: 'microsoftedgeinsider.com', url: 'https://www.microsoft.com/edge/' },
   { name: 'Brave',  domain: 'brave.com',         url: 'https://brave.com/' },
   { name: 'Arc',    domain: 'arc.net',            url: 'https://arc.net/' },
 ];
@@ -366,6 +366,7 @@ interface SenderStepProps {
   smtpHost: string; setSmtpHost: (v: string) => void;
   smtpPort: string; setSmtpPort: (v: string) => void;
   smtpTls: string; setSmtpTls: (v: string) => void;
+  smtpUsername: string; setSmtpUsername: (v: string) => void;
   error: string;
   testStatus: 'idle' | 'testing' | 'ok' | 'error';
   testError: string;
@@ -458,6 +459,10 @@ function SenderStep(props: SenderStepProps) {
                   <Label>Port</Label>
                   <input value={props.smtpPort} onChange={e => props.setSmtpPort(e.target.value)} placeholder="587" className={inputCls} />
                 </div>
+              </div>
+              <div>
+                <Label>Username</Label>
+                <input value={props.smtpUsername} onChange={e => props.setSmtpUsername(e.target.value)} placeholder="you@example.com" className={inputCls} />
               </div>
               <div>
                 <Label>Password</Label>
@@ -681,6 +686,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [showPw, setShowPw] = useState(false);
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUsername, setSmtpUsername] = useState('');
   const [smtpTls] = useState('true');
   const [senderError, setSenderError] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
@@ -706,7 +712,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const buildSmtp = () => {
     if (!provider) return null;
     if (provider === 'manual') {
-      return { name: profileName.trim(), sender_name: senderName.trim(), sender_email: email.trim(), smtp_host: smtpHost.trim(), smtp_port: smtpPort, smtp_username: email.trim(), smtp_password: password, smtp_tls: smtpTls, is_default: 1 as const, rate_limit_ms: 0 };
+      return { name: profileName.trim(), sender_name: senderName.trim(), sender_email: email.trim(), smtp_host: smtpHost.trim(), smtp_port: smtpPort, smtp_username: smtpUsername.trim() || email.trim(), smtp_password: password, smtp_tls: smtpTls, is_default: 1 as const, rate_limit_ms: 0 };
     }
     const p = PRESETS[provider];
     return { name: profileName.trim() || p.label, sender_name: senderName.trim(), sender_email: email.trim(), smtp_host: p.host, smtp_port: p.port, smtp_username: email.trim(), smtp_password: password, smtp_tls: 'true', is_default: 1 as const, rate_limit_ms: 0 };
@@ -818,6 +824,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               smtpHost={smtpHost} setSmtpHost={setSmtpHost}
               smtpPort={smtpPort} setSmtpPort={setSmtpPort}
               smtpTls={smtpTls} setSmtpTls={() => {}}
+              smtpUsername={smtpUsername} setSmtpUsername={setSmtpUsername}
               error={senderError}
               testStatus={testStatus} testError={testError}
               onTest={handleTest}
