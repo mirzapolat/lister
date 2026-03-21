@@ -107,7 +107,7 @@ const FEATURES: { label: string; chromium: string; other: string; chromiumOk: bo
 
 function BrowserWarningStep({ browserName, onContinue }: { browserName: string; onContinue: () => void }) {
   return (
-    <div className="grid grid-cols-[1fr_1.5fr] gap-10 items-start">
+    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1.5fr] gap-8 sm:gap-10 items-start">
       {/* Left column */}
       <div className="flex flex-col">
         <div style={{ animation: 'ob-scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }} className="mb-7">
@@ -144,7 +144,7 @@ function BrowserWarningStep({ browserName, onContinue }: { browserName: string; 
           </div>
         </div>
 
-        <div style={fu(0.4)} className="flex flex-col gap-2 mt-8">
+        <div style={fu(0.4)} className="flex flex-col gap-2 sm:mt-8">
           <button
             onClick={onContinue}
             className="flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm"
@@ -179,13 +179,13 @@ function BrowserWarningStep({ browserName, onContinue }: { browserName: string; 
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</span>
               </div>
               <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700">
-                <div className="px-4 py-4 bg-indigo-50/40 dark:bg-indigo-900/10 flex items-start gap-2">
+                <div className="px-3 py-3 bg-indigo-50/40 dark:bg-indigo-900/10 flex items-start gap-2">
                   <CheckCircle size={14} className="text-indigo-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300 leading-snug">{chromium}</span>
+                  <span className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 leading-snug">{chromium}</span>
                 </div>
-                <div className="px-4 py-4 flex items-start gap-2">
+                <div className="px-3 py-3 flex items-start gap-2">
                   <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm text-gray-500 dark:text-gray-400 leading-snug">{other}</span>
+                  <span className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-snug">{other}</span>
                 </div>
               </div>
             </div>
@@ -207,7 +207,7 @@ function SaveTutorialStep({ onComplete }: { onComplete: () => void }) {
   ];
 
   return (
-    <div className="grid grid-cols-[1fr_1.4fr] gap-10 items-start">
+    <div className="flex flex-col sm:grid sm:grid-cols-[1fr_1.4fr] gap-8 sm:gap-10 items-start">
       {/* Left column */}
       <div className="flex flex-col">
         <div style={{ animation: 'ob-scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }} className="mb-7">
@@ -220,7 +220,7 @@ function SaveTutorialStep({ onComplete }: { onComplete: () => void }) {
           Save your work manually
         </h2>
         <p style={fu(0.14)} className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
-          Your browser doesn't support live file saving. You control when to save — follow the steps on the right.
+          Your browser doesn't support live file saving. You control when to save — follow the steps below.
         </p>
 
         {/* Warning */}
@@ -234,7 +234,7 @@ function SaveTutorialStep({ onComplete }: { onComplete: () => void }) {
         <button
           style={fu(0.3)}
           onClick={onComplete}
-          className="mt-8 flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
+          className="sm:mt-8 flex items-center justify-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-colors text-sm shadow-sm"
         >
           Got it — open Lister
           <ArrowRight size={15} />
@@ -807,7 +807,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       </div>
 
       {/* Scrollable content */}
-      <div className={`flex-1 overflow-y-auto flex justify-center ${step === -1 || step === 4 ? 'items-center px-8 py-8' : 'items-start px-4 py-12'}`}>
+      <div className={`flex-1 overflow-y-auto flex justify-center ${step === -1 || step === 4 ? 'items-start sm:items-center px-4 sm:px-8 py-8' : 'items-start px-4 py-12'}`}>
         <div key={step} style={slideAnim} className={`w-full ${step === -1 || step === 4 ? 'max-w-3xl' : 'max-w-md'}`}>
           {step === -1 && (
             <BrowserWarningStep browserName={browserName} onContinue={() => nav(0)} />

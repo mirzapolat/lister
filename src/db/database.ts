@@ -382,9 +382,9 @@ export function getLists(): List[] {
   const database = getDb();
   const result = database.exec(`
     SELECT l.id, l.name, l.description, l.created_at,
-           COUNT(c.id) as contact_count
+           COUNT(ls.subscriber_id) as contact_count
     FROM lists l
-    LEFT JOIN contacts c ON c.list_id = l.id
+    LEFT JOIN list_subscribers ls ON ls.list_id = l.id
     GROUP BY l.id
     ORDER BY l.created_at DESC
   `);
@@ -399,8 +399,8 @@ export function getLists(): List[] {
 
 export function getList(id: number): List | null {
   const result = queryOne(
-    `SELECT l.id, l.name, l.description, l.created_at, COUNT(c.id) as contact_count
-     FROM lists l LEFT JOIN contacts c ON c.list_id = l.id
+    `SELECT l.id, l.name, l.description, l.created_at, COUNT(ls.subscriber_id) as contact_count
+     FROM lists l LEFT JOIN list_subscribers ls ON ls.list_id = l.id
      WHERE l.id = ? GROUP BY l.id`,
     [id]
   );
