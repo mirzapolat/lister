@@ -405,7 +405,7 @@ interface LandingPageProps {
 
 export function LandingPage({
   onOpenFile, onNewFile, onOpenRecent, recentFileName,
-  error, fsApi, fileInputRef, onFileInputChange,
+  error, fileInputRef, onFileInputChange,
 }: LandingPageProps) {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showImprint, setShowImprint] = useState(false);
