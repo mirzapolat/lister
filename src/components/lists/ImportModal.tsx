@@ -418,8 +418,9 @@ export function ImportModal({ isOpen, onClose, listId, onImported }: ImportModal
         {tab === 'single' && !importResult && (
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email *</label>
+              <label htmlFor="import-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email *</label>
               <input
+                id="import-email" name="import_email"
                 type="email"
                 value={singleEmail}
                 onChange={(e) => { setSingleEmail(e.target.value); setError(''); }}
@@ -429,8 +430,9 @@ export function ImportModal({ isOpen, onClose, listId, onImported }: ImportModal
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
+              <label htmlFor="import-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name</label>
               <input
+                id="import-name" name="import_name"
                 type="text"
                 value={singleName}
                 onChange={(e) => setSingleName(e.target.value)}
@@ -454,11 +456,12 @@ export function ImportModal({ isOpen, onClose, listId, onImported }: ImportModal
             {!preview ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label htmlFor="bulk-email-addresses" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Email addresses
                     <span className="text-gray-400 font-normal ml-2 text-xs">one per line — "Name &lt;email&gt;" or "email, name"</span>
                   </label>
                   <textarea
+                    id="bulk-email-addresses" name="bulk_email_addresses"
                     value={bulkText}
                     onChange={(e) => { setBulkText(e.target.value); setError(''); }}
                     placeholder={'contact@example.com\nJohn Doe <john@example.com>\njane@example.com, Jane Smith'}

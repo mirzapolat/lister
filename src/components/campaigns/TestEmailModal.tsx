@@ -77,8 +77,9 @@ export function TestEmailModal({ subject, html, text, smtp, defaultEmail, onClos
             Sends a test email with sample values for personalization tokens (name = "Test User").
           </p>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Send to</label>
+            <label htmlFor="test-email-send-to" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Send to</label>
             <input
+              id="test-email-send-to" name="test_email_send_to"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setResult(null); }}

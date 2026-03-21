@@ -159,30 +159,29 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
   ];
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Lists</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{lists.length} list{lists.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedIds.length > 0 && (
-            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
-              <Trash2 size={15} />
-              Delete ({selectedIds.length})
-            </Button>
-          )}
-          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
-          <Button variant="primary" onClick={openCreate}>
-            <Plus size={16} />
-            New List
+    <div className="p-4 sm:p-6">
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Lists</h2>
+        <button
+          onClick={openCreate}
+          className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex-shrink-0"
+          title="New List"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{lists.length} list{lists.length !== 1 ? 's' : ''}</p>
+        {selectedIds.length > 0 && (
+          <Button variant="danger" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+            <Trash2 size={14} />Delete ({selectedIds.length})
           </Button>
-        </div>
+        )}
       </div>
 
       {/* Search */}
       <div className="mb-4">
-        <div className="relative w-72">
+        <div className="relative w-full sm:w-72">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -268,8 +267,9 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name *</label>
+            <label htmlFor="list-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Name *</label>
             <input
+              id="list-name" name="list_name"
               type="text"
               value={name}
               onChange={(e) => { setName(e.target.value); setError(''); }}
@@ -281,8 +281,9 @@ export function ListsPage({ onSelectList }: ListsPageProps) {
             {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
+            <label htmlFor="list-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
             <textarea
+              id="list-description" name="list_description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"

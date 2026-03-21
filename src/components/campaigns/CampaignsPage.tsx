@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Copy, Trash2, Edit2, Send as SendIcon, Search, X } from 'lucide-react';
+import { Plus, Copy, Trash2, Edit2, Send as SendIcon, Search, X, SlidersHorizontal } from 'lucide-react';
 import { getCampaigns, deleteCampaign, duplicateCampaign } from '../../db/database';
 import type { Campaign } from '../../types';
 import { Button } from '../ui/Button';
@@ -29,6 +29,7 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const refresh = () => setCampaigns(getCampaigns());
   useEffect(() => { refresh(); }, []);
@@ -154,30 +155,29 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   ];
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{filtered.length} campaign{filtered.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {selectedIds.length > 0 && (
-            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
-              <Trash2 size={15} />
-              Delete ({selectedIds.length})
-            </Button>
-          )}
-          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n new</span>
-          <Button variant="primary" onClick={onCreateCampaign}>
-            <Plus size={16} />
-            New Campaign
+    <div className="p-4 sm:p-6">
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Campaigns</h2>
+        <button
+          onClick={onCreateCampaign}
+          className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors flex-shrink-0"
+          title="New Campaign"
+        >
+          <Plus size={18} />
+        </button>
+      </div>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} campaign{filtered.length !== 1 ? 's' : ''}</p>
+        {selectedIds.length > 0 && (
+          <Button variant="danger" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+            <Trash2 size={14} />Delete ({selectedIds.length})
           </Button>
-        </div>
+        )}
       </div>
 
-      {/* Search + filter tabs row */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative w-64 flex-shrink-0">
+      {/* Search + filter row */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -192,26 +192,42 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
             </button>
           )}
         </div>
-        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-        <div className="flex gap-1">
-        {filterTabs.map((tab) => (
+        <div className="relative flex-shrink-0">
           <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filter === tab.id
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+            onClick={() => setShowFilterMenu((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              filter !== 'all'
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
+            title="Filter"
           >
-            {tab.label}
-            <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs ${
-              filter === tab.id ? 'bg-indigo-500' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'
-            }`}>
-              {tab.count}
+            <SlidersHorizontal size={14} />
+            <span className="hidden sm:inline">
+              {filter === 'all' ? 'Filter' : filterTabs.find((t) => t.id === filter)?.label}
             </span>
           </button>
-        ))}
+          {showFilterMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setFilter(tab.id); setShowFilterMenu(false); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                      filter === tab.id
+                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {tab.label}
+                    <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{tab.count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

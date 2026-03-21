@@ -85,11 +85,12 @@ export function PasswordPrompt({ method, salt, fileName, onSuccess, onCancel }: 
             {method === 'password' && (
               <form onSubmit={handlePasswordSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  <label htmlFor="unlock-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     Password
                   </label>
                   <div className="relative">
                     <input
+                      id="unlock-password" name="unlock_password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => { setPassword(e.target.value); setError(''); }}

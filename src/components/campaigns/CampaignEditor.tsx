@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ArrowLeft, Save, Send, Eye, EyeOff, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle, BookOpen, BookmarkPlus, X, Check, AlignLeft, AlignCenter, AlignRight, ArrowDownUp, Link2, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Send, Eye, EyeOff, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle, BookOpen, BookmarkPlus, X, Check, AlignLeft, AlignCenter, AlignRight, ArrowDownUp, Link2, ImageIcon, MoreVertical } from 'lucide-react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
 import { Marked } from 'marked';
 import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile, getThemes, getDefaultTheme, getSubscribersForList, getTemplates, createTemplate } from '../../db/database';
@@ -359,8 +359,9 @@ function LinkInsertModal({ initialText, onInsert, onClose }: LinkInsertModalProp
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">URL *</label>
+              <label htmlFor="link-url" className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">URL *</label>
               <input
+                id="link-url" name="link_url"
                 type="url" value={url} onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://…" autoFocus
                 onKeyDown={(e) => { if (e.key === 'Enter' && url.trim()) handleInsert(); if (e.key === 'Escape') onClose(); }}
@@ -369,8 +370,9 @@ function LinkInsertModal({ initialText, onInsert, onClose }: LinkInsertModalProp
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Displayed Text</label>
+              <label htmlFor="link-text" className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Displayed Text</label>
               <input
+                id="link-text" name="link_text"
                 type="text" value={text} onChange={(e) => setText(e.target.value)}
                 placeholder="Leave empty to use URL"
                 className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600"
@@ -477,8 +479,9 @@ function ImageInsertModal({ onInsert, onClose }: ImageInsertModalProps) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Image URL *</label>
+              <label htmlFor="image-url" className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Image URL *</label>
               <input
+                id="image-url" name="image_url"
                 type="url" value={url} onChange={(e) => { setUrl(e.target.value); setImgError(false); }}
                 placeholder="https://…" autoFocus
                 onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
@@ -487,8 +490,9 @@ function ImageInsertModal({ onInsert, onClose }: ImageInsertModalProps) {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Alt Text</label>
+              <label htmlFor="image-alt" className="block text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Alt Text</label>
               <input
+                id="image-alt" name="image_alt"
                 type="text" value={alt} onChange={(e) => setAlt(e.target.value)}
                 placeholder="Describe the image…"
                 className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600"
@@ -575,19 +579,27 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
   const [themes, setThemes] = useState<EmailTheme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<number | ''>('');
   const [showPreview, setShowPreview] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [showLoadTemplateModal, setShowLoadTemplateModal] = useState(false);
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [showEditorMenu, setShowEditorMenu] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'write' | 'details' | 'preview'>('write');
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showSpacerModal, setShowSpacerModal] = useState(false);
   const [linkInitText, setLinkInitText] = useState('');
   const [currentId, setCurrentId] = useState<number | null>(campaignId);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Ref so auto-save callbacks always see the latest currentId without being in deps
+  const currentIdRef = useRef<number | null>(campaignId);
+  useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
+
+  // Stable ref to the immediate-save fn (used by ⌘S)
+  const saveNowRef = useRef<() => void>(() => {});
 
   const pendingApiRef = useRef<{ replaceSelection: (t: string) => void } | null>(null);
 
@@ -665,26 +677,6 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
     return Object.keys(errs).length === 0;
   };
 
-  const handleSaveDraft = useCallback(async () => {
-    if (!validate()) return;
-    setSaving(true);
-    try {
-      const profileId = selectedProfileId ? Number(selectedProfileId) : null;
-      const themeId = selectedThemeId ? Number(selectedThemeId) : null;
-      if (currentId) {
-        updateCampaign(currentId, name.trim(), subject.trim(), body, listId ? Number(listId) : null, 'draft', profileId, themeId);
-        onSaved(currentId);
-      } else {
-        const id = createCampaign(name.trim(), subject.trim(), body, listId ? Number(listId) : null, 'draft', profileId, themeId);
-        setCurrentId(id);
-        onSaved(id);
-      }
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
-  }, [name, subject, body, listId, selectedProfileId, selectedThemeId, currentId, onSaved]);
 
   const handleSend = useCallback(() => {
     if (!validate()) return;
@@ -712,27 +704,37 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
     }
   }, [currentId, name, subject, body, listId, selectedProfileId, selectedThemeId]);
 
-  // Auto-save draft on change
+  // Auto-save: create on first change, update on subsequent changes
   useEffect(() => {
-    if (!name && !subject) return;
-    const timer = setTimeout(() => {
-      if (name.trim() && subject.trim() && body.trim()) {
-        if (currentId) {
-          const profileId = selectedProfileId ? Number(selectedProfileId) : null;
-          const themeId = selectedThemeId ? Number(selectedThemeId) : null;
-          updateCampaign(currentId, name.trim(), subject.trim(), body, listId ? Number(listId) : null, 'draft', profileId, themeId);
-        }
+    if (!name.trim()) return;
+
+    const doSave = () => {
+      const profileId = selectedProfileId ? Number(selectedProfileId) : null;
+      const themeId = selectedThemeId ? Number(selectedThemeId) : null;
+      const lId = listId ? Number(listId) : null;
+      if (currentIdRef.current !== null) {
+        updateCampaign(currentIdRef.current, name.trim(), subject.trim(), body, lId, 'draft', profileId, themeId);
+      } else {
+        const id = createCampaign(name.trim(), subject.trim(), body, lId, 'draft', profileId, themeId);
+        currentIdRef.current = id;
+        setCurrentId(id);
+        onSaved(id);
       }
-    }, 1500);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    };
+
+    saveNowRef.current = doSave;
+    const timer = setTimeout(doSave, 1500);
     return () => clearTimeout(timer);
-  }, [name, subject, body, listId, selectedProfileId, selectedThemeId, currentId]);
+  }, [name, subject, body, listId, selectedProfileId, selectedThemeId, onSaved]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 's' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        handleSaveDraft();
+        saveNowRef.current();
       }
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -741,7 +743,7 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleSaveDraft, handleSend, listId]);
+  }, [handleSend, listId]);
 
   const selectedProfile = senderProfiles.find((p) => p.id === selectedProfileId) ?? null;
   const selectedSmtp = selectedProfile ? senderProfileToSmtp(selectedProfile) : null;
@@ -751,100 +753,161 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <div>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
-              placeholder="Campaign name..."
-              className={`text-base font-semibold bg-transparent border-none outline-none placeholder-gray-300 w-64 text-gray-900 dark:text-white ${errors.name ? 'text-red-500' : ''}`}
-            />
-            {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+      {/* Toolbar — Row 1: back + name + three-dot */}
+      <div className="flex items-center px-3 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 gap-2">
+        <button
+          onClick={onBack}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
+            placeholder="Campaign name..."
+            className={`text-base font-semibold bg-transparent border-none outline-none placeholder-gray-300 w-full text-gray-900 dark:text-white ${errors.name ? 'text-red-500' : ''}`}
+          />
+          {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Saved</span>}
+          {/* Three-dot menu — mobile only */}
+          <div className="relative sm:hidden">
+            <button
+              onClick={() => setShowEditorMenu((v) => !v)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="More options"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {showEditorMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowEditorMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[180px]">
+                  <button
+                    onClick={() => { setShowLoadTemplateModal(true); setShowEditorMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <BookOpen size={14} />Load template
+                  </button>
+                  <button
+                    onClick={() => { setShowSaveTemplateModal(true); setShowEditorMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <BookmarkPlus size={14} />Save as template
+                  </button>
+                  <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                  <button
+                    onClick={() => { setShowTestModal(true); setShowEditorMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <FlaskConical size={14} />Send test email
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {saved && <span className="text-xs text-green-600 font-medium">Saved</span>}
-          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">⌘S save · ⌘↵ send</span>
+      </div>
+
+      {/* Toolbar — Row 2: desktop only */}
+      <div className="hidden sm:flex items-center gap-1.5 px-6 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        {/* Template actions */}
+        <button
+          onClick={() => setShowLoadTemplateModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <BookOpen size={14} />Load template
+        </button>
+        <button
+          onClick={() => setShowSaveTemplateModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <BookmarkPlus size={14} />Save as template
+        </button>
+
+        <div className="flex-1" />
+
+        {/* Preview toggle */}
+        <button
+          onClick={() => setShowPreview(!showPreview)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            showPreview
+              ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+        >
+          {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showPreview ? 'Hide preview' : 'Preview'}
+        </button>
+
+        <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
+
+        {/* Test */}
+        <button
+          onClick={() => setShowTestModal(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+          <FlaskConical size={14} />Test
+        </button>
+
+        {/* Send */}
+        <Button variant="primary" size="sm" onClick={handleSend}>
+          <Send size={14} />Send
+        </Button>
+      </div>
+
+      {/* Mobile tabs: Write | Details | Preview */}
+      <div className="sm:hidden flex flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {(['write', 'details', 'preview'] as const).map((tab) => (
           <button
-            onClick={() => setShowLoadTemplateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Load a template"
-          >
-            <BookOpen size={14} />
-            Template
-          </button>
-          <button
-            onClick={() => setShowSaveTemplateModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Save as template"
-          >
-            <BookmarkPlus size={14} />
-            Save as Template
-          </button>
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              showPreview
-                ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+            key={tab}
+            onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${
+              mobileTab === tab
+                ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-            {showPreview ? 'Hide Preview' : 'Preview'}
+            {tab === 'write' ? 'Write' : tab === 'details' ? 'Details' : 'Preview & Send'}
           </button>
-          <Button variant="secondary" size="sm" loading={saving} onClick={handleSaveDraft}>
-            <Save size={14} />
-            Save Draft
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setShowTestModal(true)}>
-            <FlaskConical size={14} />
-            Test
-          </Button>
-          <Button variant="primary" size="sm" onClick={handleSend}>
-            <Send size={14} />
-            Send
-          </Button>
-        </div>
+        ))}
       </div>
 
       {/* Form + Editor */}
       <div className="flex-1 overflow-hidden flex">
-        <div className={`flex flex-col overflow-hidden ${showPreview ? 'w-1/2' : 'w-full'}`}>
-          {/* Meta fields */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-5 py-3 space-y-2.5">
-            <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-              {/* Subject */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Subject</label>
+        {/* Editor column: meta fields + markdown editor */}
+        <div className={`flex-col overflow-hidden sm:flex ${showPreview ? 'sm:w-1/2' : 'sm:flex-1'} ${(mobileTab === 'write' || mobileTab === 'details') ? 'flex flex-1' : 'hidden'}`}>
+          {/* Meta fields — shown on mobile only in 'details' tab */}
+          <div className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-y-auto sm:overflow-visible ${mobileTab === 'details' ? 'flex-1' : 'hidden sm:block'}`}>
+
+            {/* ── Mobile layout: full-screen form ── */}
+            <div className="sm:hidden px-5 py-6 space-y-6">
+              <div>
+                <label htmlFor="campaign-subject" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Subject line</label>
                 <input
+                  id="campaign-subject" name="campaign_subject"
                   type="text"
                   value={subject}
                   onChange={(e) => { setSubject(e.target.value); setErrors((p) => ({ ...p, subject: '' })); }}
                   placeholder="Email subject line…"
-                  className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  className={`w-full px-4 py-3 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
                 />
-                {errors.subject && <p className="text-xs text-red-500">{errors.subject}</p>}
+                {errors.subject && <p className="text-sm text-red-500 mt-1.5">{errors.subject}</p>}
               </div>
 
-              {/* From */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">From</label>
+              <div>
+                <label htmlFor="campaign-from-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">From</label>
                 {senderProfiles.length === 0 ? (
-                  <p className="text-xs text-amber-500 dark:text-amber-400 py-1.5">No sender profiles — add one in Sender Profiles.</p>
+                  <p className="text-sm text-amber-500 dark:text-amber-400 py-2">No sender profiles — add one in Settings.</p>
                 ) : (
                   <select
+                    id="campaign-from-mobile"
                     value={selectedProfileId}
                     onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">Select sender profile…</option>
                     {senderProfiles.map((p) => (
@@ -852,33 +915,50 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
                     ))}
                   </select>
                 )}
-                {errors.profile && <p className="text-xs text-red-500">{errors.profile}</p>}
+                {errors.profile && <p className="text-sm text-red-500 mt-1.5">{errors.profile}</p>}
               </div>
 
-              {/* List */}
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">List</label>
+              <div>
+                <label htmlFor="campaign-list-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Send to list</label>
                 <select
+                  id="campaign-list-mobile"
                   value={listId}
                   onChange={(e) => { setListId(e.target.value === '' ? '' : Number(e.target.value)); setErrors((p) => ({ ...p, list: '' })); setTagFilter(''); }}
-                  className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  className={`w-full px-4 py-3 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
                 >
                   <option value="">No list selected</option>
                   {lists.map((l) => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
-                {errors.list && <p className="text-xs text-red-500">{errors.list}</p>}
+                {errors.list && <p className="text-sm text-red-500 mt-1.5">{errors.list}</p>}
               </div>
 
-              {/* Theme */}
-              {themes.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Theme</label>
+              {listId !== '' && availableTags.length > 0 && (
+                <div>
+                  <label htmlFor="campaign-segment-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Segment</label>
                   <select
+                    id="campaign-segment-mobile"
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">All contacts</option>
+                    {availableTags.map((tag) => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {themes.length > 0 && (
+                <div>
+                  <label htmlFor="campaign-theme-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Theme</label>
+                  <select
+                    id="campaign-theme-mobile"
                     value={selectedThemeId}
                     onChange={(e) => setSelectedThemeId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">No theme (plain)</option>
                     {themes.map((t) => (
@@ -889,23 +969,98 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
               )}
             </div>
 
-            {/* Segment — always full width */}
-            {listId !== '' && availableTags.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Segment</label>
-                <select
-                  value={tagFilter}
-                  onChange={(e) => setTagFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="">All contacts (no segment filter)</option>
-                  {availableTags.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* ── Desktop layout: compact grid ── */}
+            <div className="hidden sm:block px-5 py-3 space-y-2.5">
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="campaign-subject" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Subject</label>
+                  <input
+                    id="campaign-subject" name="campaign_subject"
+                    type="text"
+                    value={subject}
+                    onChange={(e) => { setSubject(e.target.value); setErrors((p) => ({ ...p, subject: '' })); }}
+                    placeholder="Email subject line…"
+                    className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  />
+                  {errors.subject && <p className="text-xs text-red-500">{errors.subject}</p>}
+                </div>
 
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="campaign-from" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">From</label>
+                  {senderProfiles.length === 0 ? (
+                    <p className="text-xs text-amber-500 dark:text-amber-400 py-1.5">No sender profiles — add one in Sender Profiles.</p>
+                  ) : (
+                    <select
+                      id="campaign-from"
+                      value={selectedProfileId}
+                      onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">Select sender profile…</option>
+                      {senderProfiles.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}{p.sender_email ? ` — ${p.sender_email}` : ''}</option>
+                      ))}
+                    </select>
+                  )}
+                  {errors.profile && <p className="text-xs text-red-500">{errors.profile}</p>}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="campaign-list" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">List</label>
+                  <select
+                    id="campaign-list"
+                    value={listId}
+                    onChange={(e) => { setListId(e.target.value === '' ? '' : Number(e.target.value)); setErrors((p) => ({ ...p, list: '' })); setTagFilter(''); }}
+                    className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  >
+                    <option value="">No list selected</option>
+                    {lists.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                  {errors.list && <p className="text-xs text-red-500">{errors.list}</p>}
+                </div>
+
+                {themes.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="campaign-theme" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Theme</label>
+                    <select
+                      id="campaign-theme"
+                      value={selectedThemeId}
+                      onChange={(e) => setSelectedThemeId(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    >
+                      <option value="">No theme (plain)</option>
+                      {themes.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}{t.is_default === 1 ? ' (default)' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {listId !== '' && availableTags.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="campaign-segment" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Segment</label>
+                  <select
+                    id="campaign-segment"
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                    className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  >
+                    <option value="">All contacts (no segment filter)</option>
+                    {availableTags.map((tag) => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+          </div>
+
+          {/* Tokens hint — shown above the editor */}
+          <div className={`px-4 py-1.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 sm:block ${mobileTab === 'write' ? '' : 'hidden'}`}>
             <p className="text-xs text-gray-400 dark:text-gray-500">
               Tokens: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{name}}'}</code>{', '}
               <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{first_name}}'}</code>{', '}
@@ -913,8 +1068,8 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
             </p>
           </div>
 
-          {/* MD Editor */}
-          <div className="flex-1 overflow-hidden" data-color-mode={settings.editorTheme}>
+          {/* MD Editor — shown on mobile only in 'write' tab */}
+          <div className={`flex-1 overflow-hidden sm:flex sm:flex-col ${mobileTab === 'write' ? 'flex flex-col' : 'hidden'}`} data-color-mode={settings.editorTheme}>
             <MDEditor
               value={body}
               onChange={(val) => setBody(val ?? '')}
@@ -944,19 +1099,29 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
           </div>
         </div>
 
-        {/* Email Preview */}
-        {showPreview && (
-          <div className="w-1/2 border-l border-gray-200 dark:border-gray-700 flex flex-col bg-gray-100 dark:bg-gray-900">
+        {/* Email Preview — shown on mobile when 'preview' tab, on desktop when showPreview */}
+        {(showPreview || mobileTab === 'preview') && (
+          <div className={`border-gray-200 dark:border-gray-700 flex flex-col bg-gray-100 dark:bg-gray-900 ${mobileTab === 'preview' ? 'flex-1 sm:hidden' : ''} ${showPreview ? 'hidden sm:flex sm:w-1/2 sm:border-l' : ''}`}>
             <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
               <p className="text-xs text-gray-500 dark:text-gray-400"><strong>From:</strong> {selectedProfile?.sender_name || '—'} &lt;{selectedProfile?.sender_email || 'no profile selected'}&gt;</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"><strong>Subject:</strong> {subject || '(no subject)'}</p>
             </div>
             <iframe
               srcDoc={buildEmailHtml(subject || '(no subject)', body, selectedProfile?.sender_name ?? '', true, selectedTheme?.template_html)}
-              className="flex-1 w-full border-none"
+              className="flex-1 w-full border-none min-h-0"
               sandbox="allow-same-origin"
               title="Email preview"
             />
+            {/* Mobile: Preview & Send button */}
+            <div className="sm:hidden flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleSend}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+              >
+                <Send size={15} />
+                Send
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1169,8 +1334,9 @@ function SaveTemplateModal({ defaultName, subject, body, onClose }: SaveTemplate
           ) : (
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Template Name *</label>
+                <label htmlFor="save-template-name" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Template Name *</label>
                 <input
+                  id="save-template-name" name="save_template_name"
                   type="text"
                   value={name}
                   onChange={(e) => { setName(e.target.value); setError(''); }}
@@ -1182,8 +1348,9 @@ function SaveTemplateModal({ defaultName, subject, body, onClose }: SaveTemplate
                 {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
+                <label htmlFor="save-template-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
                 <input
+                  id="save-template-description" name="save_template_description"
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}

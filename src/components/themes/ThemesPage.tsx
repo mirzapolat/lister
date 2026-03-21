@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Check, Copy, Trash2, Plus, Star, Search, X, Download, Upload } from 'lucide-react';
+import { Check, Copy, Trash2, Plus, Star, Search, X, Download, Upload, MoreVertical, SlidersHorizontal } from 'lucide-react';
 import { Marked } from 'marked';
 import { getThemes, createTheme, updateTheme, deleteTheme, setDefaultTheme } from '../../db/database';
 import type { EmailTheme } from '../../types';
@@ -155,6 +155,8 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
   const [html, setHtml] = useState(theme?.template_html ?? initialHtml ?? STARTER_TEMPLATE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [previewHtml, setPreviewHtml] = useState('');
+  const [mobileTab, setMobileTab] = useState<'code' | 'preview'>('code');
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isDefault = theme?.is_default === 1;
@@ -202,27 +204,26 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {theme ? 'Edit Theme' : 'New Theme'}
         </h2>
         <div className="flex items-center gap-2">
-          {/* Export — only when editing an existing theme */}
+          {/* Desktop: full action buttons */}
           {theme && (
             <button
               onClick={() => exportTheme({ ...theme, name, template_html: html })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               title="Export theme as HTML file"
             >
               <Download size={13} />Export
             </button>
           )}
-          {/* Set default */}
           {theme && onSetDefault && (
             <button
               onClick={onSetDefault}
               disabled={isDefault}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 isDefault
                   ? 'text-indigo-400 dark:text-indigo-500 cursor-default'
                   : 'text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
@@ -237,27 +238,93 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
             <>
               <button
                 onClick={onDelete}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
                 <Trash2 size={13} />Delete
               </button>
-              <div className="w-px h-4 bg-gray-200 dark:bg-gray-600" />
+              <div className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-gray-600" />
             </>
           )}
-          <div className="w-px h-4 bg-gray-200 dark:bg-gray-600" />
+          <div className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-gray-600" />
+
+          {/* Mobile: three-dot menu for secondary actions */}
+          {(theme) && (
+            <div className="relative sm:hidden">
+              <button
+                onClick={() => setShowMobileMenu((v) => !v)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <MoreVertical size={18} />
+              </button>
+              {showMobileMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowMobileMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[170px]">
+                    {theme && (
+                      <button
+                        onClick={() => { exportTheme({ ...theme, name, template_html: html }); setShowMobileMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        <Download size={14} />Export
+                      </button>
+                    )}
+                    {theme && onSetDefault && (
+                      <button
+                        onClick={() => { onSetDefault(); setShowMobileMenu(false); }}
+                        disabled={isDefault}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors ${isDefault ? 'text-indigo-400 cursor-default' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                      >
+                        <Star size={14} className={isDefault ? 'fill-current' : ''} />
+                        {isDefault ? 'Default' : 'Set default'}
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        onClick={() => { onDelete(); setShowMobileMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <Trash2 size={14} />Delete
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="sm" onClick={handleSave}>Save Theme</Button>
+          <Button variant="primary" size="sm" onClick={handleSave}>
+            Save<span className="hidden sm:inline"> Theme</span>
+          </Button>
         </div>
+      </div>
+
+      {/* Mobile tabs */}
+      <div className="sm:hidden flex flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {(['code', 'preview'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${
+              mobileTab === tab
+                ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab === 'code' ? 'Code' : 'Preview'}
+          </button>
+        ))}
       </div>
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: fields + code */}
-        <div className="w-1/2 flex flex-col border-r border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="flex-shrink-0 px-6 py-4 space-y-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <div className={`flex-col border-gray-200 dark:border-gray-700 overflow-hidden sm:flex sm:w-1/2 sm:border-r ${mobileTab === 'code' ? 'flex flex-1' : 'hidden'}`}>
+          <div className="flex-shrink-0 px-4 sm:px-6 py-4 space-y-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Theme Name</label>
+              <label htmlFor="theme-name" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Theme Name</label>
               <input
+                id="theme-name" name="theme_name"
                 type="text"
                 value={name}
                 onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
@@ -267,8 +334,9 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
+              <label htmlFor="theme-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
               <input
+                id="theme-description" name="theme_description"
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -281,7 +349,7 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
               <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded font-mono">{'{{subject}}'}</code> for the subject line.
             </p>
           </div>
-          <div className="flex-1 flex flex-col overflow-hidden px-6 py-3">
+          <div className="flex-1 flex flex-col overflow-hidden px-4 sm:px-6 py-3">
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5 flex-shrink-0">HTML Template</label>
             {errors.html && <p className="text-xs text-red-500 mb-1">{errors.html}</p>}
             <textarea
@@ -294,7 +362,7 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
         </div>
 
         {/* Right: live preview */}
-        <div className="w-1/2 flex flex-col overflow-hidden bg-gray-100 dark:bg-gray-900">
+        <div className={`flex-col overflow-hidden bg-gray-100 dark:bg-gray-900 sm:flex sm:w-1/2 ${mobileTab === 'preview' ? 'flex flex-1' : 'hidden'}`}>
           <div className="flex-shrink-0 px-6 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Live Preview</p>
           </div>
@@ -323,61 +391,115 @@ interface ThemePreviewModalProps {
 function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit, onDelete }: ThemePreviewModalProps) {
   const previewDoc = useMemo(() => renderPreview(theme.template_html), [theme.template_html]);
   const isDefault = theme.is_default === 1;
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const raf1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setVisible(true));
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, []);
+
+  const handleClose = () => {
+    setVisible(false);
+    setTimeout(onClose, 320);
+  };
+
+  const header = (
+    <>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{theme.name}</h3>
+          {isDefault && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
+              <Check size={9} />Default
+            </span>
+          )}
+          <span className="text-xs text-gray-400">Built-in</span>
+        </div>
+        {theme.description && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{theme.description}</p>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
+        <button
+          onClick={onSetDefault}
+          disabled={isDefault}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            isDefault
+              ? 'text-indigo-400 dark:text-indigo-500 cursor-default'
+              : 'text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+          }`}
+        >
+          <Star size={12} className={isDefault ? 'fill-current' : ''} />
+          <span className="hidden sm:inline">{isDefault ? 'Default' : 'Set default'}</span>
+        </button>
+        <button
+          onClick={onDuplicateAndEdit}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+        >
+          <Copy size={12} /><span className="hidden sm:inline">Duplicate &amp; </span>Edit
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+          title="Delete theme"
+        >
+          <Trash2 size={12} /><span className="hidden sm:inline">Delete</span>
+        </button>
+      </div>
+    </>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10 w-full max-w-2xl max-h-[90vh]">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{theme.name}</h3>
-              {isDefault && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
-                  <Check size={9} />Default
-                </span>
-              )}
-              <span className="text-xs text-gray-400">Built-in</span>
-            </div>
-            {theme.description && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{theme.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0 ml-4">
-            <button
-              onClick={onSetDefault}
-              disabled={isDefault}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                isDefault
-                  ? 'text-indigo-400 dark:text-indigo-500 cursor-default'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-              }`}
-            >
-              <Star size={12} className={isDefault ? 'fill-current' : ''} />
-              {isDefault ? 'Default' : 'Set default'}
-            </button>
-            <button
-              onClick={onDuplicateAndEdit}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
-            >
-              <Copy size={12} />Duplicate &amp; Edit
-            </button>
-            <button
-              onClick={onDelete}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              title="Delete theme"
-            >
-              <Trash2 size={12} />Delete
-            </button>
-          </div>
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
+        onClick={handleClose}
+      />
+
+      {/* Mobile: bottom sheet */}
+      <div
+        className="sm:hidden fixed inset-x-0 bottom-0 z-10 flex flex-col bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl overflow-hidden transition-transform duration-300 ease-out"
+        style={{ height: '88dvh', transform: visible ? 'translateY(0)' : 'translateY(100%)' }}
+      >
+        <div className="flex justify-center pt-2.5 pb-0.5 flex-shrink-0">
+          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+        </div>
+        <div className="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 gap-2">
+          {header}
+          <button onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
+            <X size={18} />
+          </button>
         </div>
         <iframe
           srcDoc={previewDoc}
           className="flex-1 w-full border-none min-h-0"
           sandbox="allow-same-origin"
           title={`Full preview of ${theme.name}`}
-          style={{ minHeight: '480px' }}
         />
+      </div>
+
+      {/* Desktop: centered card */}
+      <div className="hidden sm:flex fixed inset-0 items-center justify-center p-6">
+        <div
+          className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10 w-full max-w-2xl max-h-[90vh] transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+        >
+          <div className="flex items-center px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 gap-2">
+            {header}
+            <button onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0 ml-1">
+              <X size={16} />
+            </button>
+          </div>
+          <iframe
+            srcDoc={previewDoc}
+            className="flex-1 w-full border-none min-h-0"
+            sandbox="allow-same-origin"
+            title={`Full preview of ${theme.name}`}
+            style={{ minHeight: '480px' }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -488,6 +610,8 @@ export function ThemesPage() {
   const [editorTheme, setEditorTheme] = useState<EmailTheme | null | undefined>(undefined); // undefined = closed, null = new
   const [deleteTarget, setDeleteTarget] = useState<EmailTheme | null>(null);
   const [previewTarget, setPreviewTarget] = useState<EmailTheme | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const load = () => setThemes(getThemes());
   useEffect(() => { load(); }, []);
@@ -589,28 +713,51 @@ export function ThemesPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Themes</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {themes.length} theme{themes.length !== 1 ? 's' : ''} — controls how your campaigns look
-          </p>
+      <div className="flex items-start justify-between mb-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Themes</h1>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Three-dot: import */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="More options"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {showMoreMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
+                  <button
+                    onClick={() => { handleImport(); setShowMoreMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Upload size={14} />Import theme
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {/* Plus button */}
+          <button
+            onClick={() => openEditor(null)}
+            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+            title="New Theme"
+          >
+            <Plus size={18} />
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={handleImport}>
-            <Upload size={14} />Import
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => openEditor(null)}>
-            <Plus size={14} />New Theme
-          </Button>
-        </div>
+      </div>
+      <div className="mb-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{themes.length} theme{themes.length !== 1 ? 's' : ''}</p>
       </div>
 
       {/* Search + Filter row */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="relative w-60 flex-shrink-0">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -625,26 +772,46 @@ export function ThemesPage() {
             </button>
           )}
         </div>
-        <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-        <div className="flex gap-1">
-          {filterTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                filter === tab.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {tab.label}
-              {tab.id !== 'all' && (
-                <span className={`ml-1.5 text-xs ${filter === tab.id ? 'text-indigo-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {tab.id === 'preset' ? themes.filter((t) => t.is_builtin === 1).length : customCount}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setShowFilterMenu((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+              filter !== 'all'
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            title="Filter"
+          >
+            <SlidersHorizontal size={14} />
+            <span className="hidden sm:inline">
+              {filter === 'all' ? 'Filter' : filterTabs.find((t) => t.id === filter)?.label}
+            </span>
+          </button>
+          {showFilterMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
+                {filterTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => { setFilter(tab.id); setShowFilterMenu(false); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                      filter === tab.id
+                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.id !== 'all' && (
+                      <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
+                        {tab.id === 'preset' ? themes.filter((t) => t.is_builtin === 1).length : customCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

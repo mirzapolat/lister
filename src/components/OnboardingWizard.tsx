@@ -82,8 +82,8 @@ const CHROMIUM_BROWSERS = [
 
 const inputCls = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400';
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">{children}</label>;
+function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
+  return <label htmlFor={htmlFor} className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">{children}</label>;
 }
 
 function StepNav({ onBack, backLabel = 'Back' }: { onBack?: () => void; backLabel?: string }) {
@@ -438,36 +438,36 @@ function SenderStep(props: SenderStepProps) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Profile name</Label>
-                  <input value={props.profileName} onChange={e => props.setProfileName(e.target.value)} placeholder="My SMTP" className={inputCls} />
+                  <Label htmlFor="onboarding-profile-name">Profile name</Label>
+                  <input id="onboarding-profile-name" name="profile_name" value={props.profileName} onChange={e => props.setProfileName(e.target.value)} placeholder="My SMTP" className={inputCls} />
                 </div>
                 <div>
-                  <Label>Sender name</Label>
-                  <input value={props.senderName} onChange={e => props.setSenderName(e.target.value)} placeholder="Jane Smith" className={inputCls} />
+                  <Label htmlFor="onboarding-sender-name">Sender name</Label>
+                  <input id="onboarding-sender-name" name="sender_name" value={props.senderName} onChange={e => props.setSenderName(e.target.value)} placeholder="Jane Smith" className={inputCls} />
                 </div>
               </div>
               <div>
-                <Label>From email</Label>
-                <input type="email" value={props.email} onChange={e => props.setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
+                <Label htmlFor="onboarding-from-email">From email</Label>
+                <input id="onboarding-from-email" name="sender_email" type="email" value={props.email} onChange={e => props.setEmail(e.target.value)} placeholder="you@example.com" className={inputCls} />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
-                  <Label>SMTP host</Label>
-                  <input value={props.smtpHost} onChange={e => props.setSmtpHost(e.target.value)} placeholder="smtp.example.com" className={inputCls} />
+                  <Label htmlFor="onboarding-smtp-host">SMTP host</Label>
+                  <input id="onboarding-smtp-host" name="smtp_host" value={props.smtpHost} onChange={e => props.setSmtpHost(e.target.value)} placeholder="smtp.example.com" className={inputCls} />
                 </div>
                 <div>
-                  <Label>Port</Label>
-                  <input value={props.smtpPort} onChange={e => props.setSmtpPort(e.target.value)} placeholder="587" className={inputCls} />
+                  <Label htmlFor="onboarding-smtp-port">Port</Label>
+                  <input id="onboarding-smtp-port" name="smtp_port" value={props.smtpPort} onChange={e => props.setSmtpPort(e.target.value)} placeholder="587" className={inputCls} />
                 </div>
               </div>
               <div>
-                <Label>Username</Label>
-                <input value={props.smtpUsername} onChange={e => props.setSmtpUsername(e.target.value)} placeholder="you@example.com" className={inputCls} />
+                <Label htmlFor="onboarding-smtp-username">Username</Label>
+                <input id="onboarding-smtp-username" name="smtp_username" value={props.smtpUsername} onChange={e => props.setSmtpUsername(e.target.value)} placeholder="you@example.com" className={inputCls} />
               </div>
               <div>
-                <Label>Password</Label>
+                <Label htmlFor="onboarding-smtp-password">Password</Label>
                 <div className="relative">
-                  <input type={props.showPw ? 'text' : 'password'} value={props.password} onChange={e => props.setPassword(e.target.value)} placeholder="SMTP password" className={inputCls + ' pr-10'} />
+                  <input id="onboarding-smtp-password" name="smtp_password" type={props.showPw ? 'text' : 'password'} value={props.password} onChange={e => props.setPassword(e.target.value)} placeholder="SMTP password" className={inputCls + ' pr-10'} />
                   <button type="button" onClick={() => props.setShowPw(!props.showPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     {props.showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -478,22 +478,22 @@ function SenderStep(props: SenderStepProps) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Profile name</Label>
-                  <input value={props.profileName} onChange={e => props.setProfileName(e.target.value)} placeholder={preset?.label ?? ''} className={inputCls} />
+                  <Label htmlFor="onboarding-profile-name">Profile name</Label>
+                  <input id="onboarding-profile-name" name="profile_name" value={props.profileName} onChange={e => props.setProfileName(e.target.value)} placeholder={preset?.label ?? ''} className={inputCls} />
                 </div>
                 <div>
-                  <Label>Sender name</Label>
-                  <input value={props.senderName} onChange={e => props.setSenderName(e.target.value)} placeholder="Jane Smith" className={inputCls} />
+                  <Label htmlFor="onboarding-sender-name">Sender name</Label>
+                  <input id="onboarding-sender-name" name="sender_name" value={props.senderName} onChange={e => props.setSenderName(e.target.value)} placeholder="Jane Smith" className={inputCls} />
                 </div>
               </div>
               <div>
-                <Label>Email address</Label>
-                <input type="email" value={props.email} onChange={e => props.setEmail(e.target.value)} placeholder={`you@${preset?.domain.replace('smtp.', '') ?? 'example.com'}`} className={inputCls} />
+                <Label htmlFor="onboarding-email-address">Email address</Label>
+                <input id="onboarding-email-address" name="sender_email" type="email" value={props.email} onChange={e => props.setEmail(e.target.value)} placeholder={`you@${preset?.domain.replace('smtp.', '') ?? 'example.com'}`} className={inputCls} />
               </div>
               <div>
-                <Label>App password</Label>
+                <Label htmlFor="onboarding-app-password">App password</Label>
                 <div className="relative">
-                  <input type={props.showPw ? 'text' : 'password'} value={props.password} onChange={e => props.setPassword(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" className={inputCls + ' pr-10'} />
+                  <input id="onboarding-app-password" name="smtp_password" type={props.showPw ? 'text' : 'password'} value={props.password} onChange={e => props.setPassword(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" className={inputCls + ' pr-10'} />
                   <button type="button" onClick={() => props.setShowPw(!props.showPw)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     {props.showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -561,8 +561,9 @@ function ListStep({ listName, setListName, listDesc, setListDesc, onSave, onSkip
 
       <div style={fu(0.12)} className="space-y-4">
         <div>
-          <Label>List name</Label>
+          <Label htmlFor="onboarding-list-name">List name</Label>
           <input
+            id="onboarding-list-name" name="list_name"
             autoFocus
             type="text"
             value={listName}
@@ -573,8 +574,9 @@ function ListStep({ listName, setListName, listDesc, setListDesc, onSave, onSkip
           />
         </div>
         <div>
-          <Label>Description <span className="normal-case font-normal text-gray-400">(optional)</span></Label>
+          <Label htmlFor="onboarding-list-description">Description <span className="normal-case font-normal text-gray-400">(optional)</span></Label>
           <textarea
+            id="onboarding-list-description" name="list_description"
             value={listDesc}
             onChange={e => setListDesc(e.target.value)}
             placeholder="What's this list for?"

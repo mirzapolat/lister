@@ -426,13 +426,20 @@ export function LandingPage({
       style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}
     >
       {/* ── Sticky nav ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 bg-[#fafaf9]/90 dark:bg-gray-950/90 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-800/60">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 bg-[#fafaf9]/95 dark:bg-gray-950/95 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-800/60">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <Database size={14} className="text-white" />
-            </div>
+            <svg width="28" height="28" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
+              <rect width="32" height="32" rx="7" fill="#4f46e5"/>
+              <g transform="translate(7.5, 6.5)" stroke="white" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                <ellipse cx="8.5" cy="4.5" rx="6.5" ry="2.2" strokeWidth="1.6"/>
+                <line x1="2" y1="4.5" x2="2" y2="14.5" strokeWidth="1.6"/>
+                <line x1="15" y1="4.5" x2="15" y2="14.5" strokeWidth="1.6"/>
+                <ellipse cx="8.5" cy="14.5" rx="6.5" ry="2.2" strokeWidth="1.6"/>
+                <path d="M2 9.5 C2 11.7 4.9 13.5 8.5 13.5 C12.1 13.5 15 11.7 15 9.5" strokeWidth="1.3" opacity="0.75"/>
+              </g>
+            </svg>
             <span className="font-semibold text-gray-900 dark:text-white tracking-tight">Lister</span>
           </div>
 
@@ -444,22 +451,29 @@ export function LandingPage({
                 className="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 <Clock size={13} />
-                <span className="max-w-[120px] truncate">{recentFileName}</span>
+                <span className="max-w-[140px] truncate">{recentFileName}</span>
               </button>
             )}
             <button
               onClick={onOpenFile}
-              className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 px-3.5 py-1.5 rounded-lg transition-all"
+              className="hidden sm:flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-3.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
             >
               <FolderOpen size={14} />
-              Open file
+              Open
+            </button>
+            <button
+              onClick={onOpenFile}
+              className="sm:hidden flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-2.5 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all"
+              aria-label="Open file"
+            >
+              <FolderOpen size={16} />
             </button>
             <button
               onClick={onNewFile}
-              className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 px-3.5 py-1.5 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 rounded-lg transition-colors shadow-sm shadow-indigo-500/30"
             >
               <Plus size={14} />
-              New file
+              <span>New file</span>
             </button>
           </div>
         </div>
@@ -624,26 +638,28 @@ export function LandingPage({
         </div>
 
         {/* Comparison table */}
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
-          <div className="grid grid-cols-3 text-xs font-semibold uppercase tracking-wider bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
-            <div className="px-5 py-3 text-gray-500 dark:text-gray-400">What matters</div>
-            <div className="px-5 py-3 text-gray-500 dark:text-gray-400 border-x border-gray-200 dark:border-gray-700">Typical SaaS</div>
-            <div className="px-5 py-3 text-indigo-600 dark:text-indigo-400">Lister</div>
-          </div>
-          {[
-            ['Your data is portable',      '✗  Locked in their DB',        '✓  SQLite file, yours forever'],
-            ['Works offline',              '✗  Requires internet',          '✓  Fully offline'],
-            ['No subscription needed',     '✗  Monthly billing',            '✓  One-time, no fees'],
-            ['Subscriber privacy',         '✗  Third-party servers',        '✓  Never leaves your device'],
-            ['Your SMTP, your domain',     '✗  Shared infrastructure',      '✓  Bring your own SMTP'],
-            ['Encrypted at rest',          '△  Vendor-managed',             '✓  Password or passkey'],
-          ].map(([feature, saas, lister]) => (
-            <div key={feature} className="grid grid-cols-3 text-sm border-b border-gray-100 dark:border-gray-800 last:border-0">
-              <div className="px-5 py-3 text-gray-700 dark:text-gray-300 font-medium">{feature}</div>
-              <div className="px-5 py-3 text-gray-500 dark:text-gray-500 border-x border-gray-100 dark:border-gray-800">{saas}</div>
-              <div className="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-medium">{lister}</div>
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-x-auto">
+          <div className="min-w-[480px]">
+            <div className="grid grid-cols-3 text-xs font-semibold uppercase tracking-wider bg-gray-50 dark:bg-gray-800/60 border-b border-gray-200 dark:border-gray-700">
+              <div className="px-4 sm:px-5 py-3 text-gray-500 dark:text-gray-400">What matters</div>
+              <div className="px-4 sm:px-5 py-3 text-gray-500 dark:text-gray-400 border-x border-gray-200 dark:border-gray-700">Typical SaaS</div>
+              <div className="px-4 sm:px-5 py-3 text-indigo-600 dark:text-indigo-400">Lister</div>
             </div>
-          ))}
+            {[
+              ['Your data is portable',      '✗  Locked in their DB',        '✓  SQLite file, yours forever'],
+              ['Works offline',              '✗  Requires internet',          '✓  Fully offline'],
+              ['No subscription needed',     '✗  Monthly billing',            '✓  One-time, no fees'],
+              ['Subscriber privacy',         '✗  Third-party servers',        '✓  Never leaves your device'],
+              ['Your SMTP, your domain',     '✗  Shared infrastructure',      '✓  Bring your own SMTP'],
+              ['Encrypted at rest',          '△  Vendor-managed',             '✓  Password or passkey'],
+            ].map(([feature, saas, lister]) => (
+              <div key={feature} className="grid grid-cols-3 text-sm border-b border-gray-100 dark:border-gray-800 last:border-0">
+                <div className="px-4 sm:px-5 py-3 text-gray-700 dark:text-gray-300 font-medium">{feature}</div>
+                <div className="px-4 sm:px-5 py-3 text-gray-500 dark:text-gray-500 border-x border-gray-100 dark:border-gray-800">{saas}</div>
+                <div className="px-4 sm:px-5 py-3 text-emerald-600 dark:text-emerald-400 font-medium">{lister}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

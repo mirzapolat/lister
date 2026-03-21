@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { List, Users, Send, Settings, Radio, Download, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen } from 'lucide-react';
+import { List, Users, Send, Settings, Radio, Download, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen, Menu } from 'lucide-react';
 import type { Page } from '../types';
 
 interface NavChild {
@@ -71,14 +71,26 @@ function useCollapsed() {
   return [collapsed, toggle] as const;
 }
 
+const pageLabels: Partial<Record<Page, string>> = {
+  lists: 'Lists', subscribers: 'Subscribers', campaigns: 'Campaigns',
+  templates: 'Templates', themes: 'Themes', 'sender-profiles': 'Sender Profiles',
+  settings: 'Settings', 'list-detail': 'List', 'campaign-editor': 'Campaign',
+};
+
 export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, children }: LayoutProps) {
   const [collapsed, toggleCollapsed] = useCollapsed();
   const [openSections, setOpenSections] = useState<Set<Page>>(loadOpenSections);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const activePage: Page = topLevelPages.includes(currentPage) ? currentPage :
     currentPage === 'list-detail' ? 'lists' :
     currentPage === 'campaign-editor' ? 'campaigns' :
     currentPage;
+
+  const handleNavigate = (page: Page) => {
+    onNavigate(page);
+    setMobileOpen(false);
+  };
 
   // Auto-expand parent when navigating to a child
   useEffect(() => {
@@ -106,9 +118,35 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, ch
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile top bar */}
+      <div className="fixed top-0 left-0 right-0 z-30 md:hidden flex items-center px-3 h-14 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          aria-label="Open navigation"
+        >
+          <Menu size={20} />
+        </button>
+        <span className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-gray-900 dark:text-white">
+          {pageLabels[currentPage] ?? 'Lister'}
+        </span>
+      </div>
+
       {/* Sidebar */}
       <aside
-        className="flex-shrink-0 flex flex-col transition-all duration-200"
+        className={`
+          fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-200
+          md:static md:z-auto md:translate-x-0 md:flex-shrink-0
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
         style={{ backgroundColor: '#1a1f2e', width: collapsed ? '56px' : '224px' }}
       >
         {/* Logo + collapse toggle */}
@@ -141,7 +179,7 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, ch
                 {/* Parent row */}
                 <div className={`flex items-center rounded-lg ${isActive ? 'bg-white/10' : ''}`}>
                   <button
-                    onClick={() => onNavigate(item.id)}
+                    onClick={() => handleNavigate(item.id)}
                     title={collapsed ? item.label : undefined}
                     className={`
                       flex-1 flex items-center min-w-0 text-sm font-medium transition-colors duration-150
@@ -182,7 +220,7 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, ch
                       return (
                         <button
                           key={child.id}
-                          onClick={() => onNavigate(child.id)}
+                          onClick={() => handleNavigate(child.id)}
                           className={`
                             w-full flex items-center gap-2.5 rounded-lg text-sm font-medium transition-colors duration-150
                             px-2.5 py-2
@@ -234,7 +272,7 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, ch
       </aside>
 
       {/* Main area */}
-      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900 pt-14 md:pt-0">
         {children}
       </div>
     </div>

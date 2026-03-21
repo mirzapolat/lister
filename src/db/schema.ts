@@ -157,5 +157,6 @@ SELECT
   COALESCE((SELECT value FROM settings WHERE key='smtp_password'), ''),
   COALESCE((SELECT value FROM settings WHERE key='smtp_tls'), 'true'),
   1
-WHERE NOT EXISTS (SELECT 1 FROM sender_profiles);
+WHERE NOT EXISTS (SELECT 1 FROM sender_profiles)
+  AND EXISTS (SELECT 1 FROM settings WHERE key = 'smtp_host' AND value != '');
 `;

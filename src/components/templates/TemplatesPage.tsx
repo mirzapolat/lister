@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Copy, Trash2, Edit2, Search, X, Download, Upload, BookOpen } from 'lucide-react';
+import { Plus, Copy, Trash2, Edit2, Search, X, Download, Upload, BookOpen, MoreVertical, SlidersHorizontal } from 'lucide-react';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate, duplicateTemplate } from '../../db/database';
 import type { EmailTemplate } from '../../types';
 import { Button } from '../ui/Button';
@@ -28,6 +28,7 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
   const [subject, setSubject] = useState(template?.subject ?? '');
   const [body, setBody] = useState(template?.body ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [mobileTab, setMobileTab] = useState<'details' | 'body'>('details');
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -51,23 +52,43 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
         <h2 className="text-base font-semibold text-gray-900 dark:text-white">
           {template ? 'Edit Template' : 'New Template'}
         </h2>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" size="sm" onClick={handleSave}>Save Template</Button>
+          <Button variant="primary" size="sm" onClick={handleSave}>
+            Save<span className="hidden sm:inline"> Template</span>
+          </Button>
         </div>
+      </div>
+
+      {/* Mobile tabs */}
+      <div className="sm:hidden flex flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {(['details', 'body'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setMobileTab(tab)}
+            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${
+              mobileTab === tab
+                ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab === 'details' ? 'Details' : 'Body'}
+          </button>
+        ))}
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left: metadata */}
-        <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto">
-          <div className="p-6 space-y-4">
+        <div className={`flex-col border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-y-auto sm:flex sm:w-80 sm:flex-shrink-0 sm:border-r ${mobileTab === 'details' ? 'flex flex-1' : 'hidden'}`}>
+          <div className="p-4 sm:p-6 space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Template Name *</label>
+              <label htmlFor="template-name" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Template Name *</label>
               <input
+                id="template-name" name="template_name"
                 type="text"
                 value={name}
                 onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
@@ -78,8 +99,9 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
+              <label htmlFor="template-description" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Description (optional)</label>
               <textarea
+                id="template-description" name="template_description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description..."
@@ -88,8 +110,9 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Default Subject *</label>
+              <label htmlFor="template-subject" className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Default Subject *</label>
               <input
+                id="template-subject" name="template_subject"
                 type="text"
                 value={subject}
                 onChange={(e) => { setSubject(e.target.value); setErrors((p) => ({ ...p, subject: '' })); }}
@@ -110,7 +133,7 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
         </div>
 
         {/* Right: body */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`flex-col overflow-hidden sm:flex sm:flex-1 ${mobileTab === 'body' ? 'flex flex-1' : 'hidden'}`}>
           <div className="flex-shrink-0 px-6 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Email Body (Markdown)</p>
           </div>
@@ -150,6 +173,8 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<EmailTemplate | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -331,39 +356,64 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
 
       {/* Header */}
+      <div className="flex items-start justify-between mb-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Three-dot: import / export */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="More options"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {showMoreMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[160px]">
+                  <button
+                    onClick={() => { importRef.current?.click(); setShowMoreMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Upload size={14} />Import JSON
+                  </button>
+                  <button
+                    onClick={() => { handleExport(); setShowMoreMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Download size={14} />{selectedIds.length > 0 ? `Export (${selectedIds.length})` : 'Export all'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          {/* Plus button */}
+          <button
+            onClick={() => setEditorTemplate('new')}
+            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+            title="New Template"
+          >
+            <Plus size={18} />
+          </button>
+        </div>
+      </div>
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => importRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title="Import from JSON"
-          >
-            <Upload size={14} />Import
-          </button>
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title={selectedIds.length > 0 ? `Export ${selectedIds.length} selected` : 'Export all'}
-          >
-            <Download size={14} />{selectedIds.length > 0 ? `Export (${selectedIds.length})` : 'Export'}
-          </button>
-          <Button variant="primary" size="sm" onClick={() => setEditorTemplate('new')}>
-            <Plus size={14} />New Template
+        <p className="text-sm text-gray-500 dark:text-gray-400">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
+        {selectedDeletable.length > 0 && (
+          <Button variant="danger" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+            <Trash2 size={13} />Delete ({selectedDeletable.length})
           </Button>
-        </div>
+        )}
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative w-64 flex-shrink-0">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -378,30 +428,43 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
             </button>
           )}
         </div>
-        <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
-        <div className="flex gap-1">
-          {(['all', 'preset', 'custom'] as Filter[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === f
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {f === 'all' ? 'All' : f === 'preset' ? 'Presets' : 'Custom'}
-              <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs ${filter === f ? 'bg-indigo-500' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
-                {f === 'all' ? filterCounts.all : f === 'preset' ? filterCounts.preset : filterCounts.custom}
-              </span>
-            </button>
-          ))}
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setShowFilterMenu((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              filter !== 'all'
+                ? 'bg-indigo-600 border-indigo-600 text-white'
+                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+            title="Filter"
+          >
+            <SlidersHorizontal size={14} />
+            <span className="hidden sm:inline">
+              {filter === 'all' ? 'Filter' : filter === 'preset' ? 'Presets' : 'Custom'}
+            </span>
+          </button>
+          {showFilterMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
+                {([['all', 'All', filterCounts.all], ['preset', 'Presets', filterCounts.preset], ['custom', 'Custom', filterCounts.custom]] as [Filter, string, number][]).map(([f, label, count]) => (
+                  <button
+                    key={f}
+                    onClick={() => { setFilter(f); setShowFilterMenu(false); }}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
+                      filter === f
+                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                    <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{count}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-        {selectedDeletable.length > 0 && (
-          <Button variant="danger" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
-            <Trash2 size={13} />Delete ({selectedDeletable.length})
-          </Button>
-        )}
       </div>
 
       {/* Table */}

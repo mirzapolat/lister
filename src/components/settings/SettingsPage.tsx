@@ -151,10 +151,11 @@ function ProviderModal({ provider, onClose, onSaved }: ProviderModalProps) {
 
         {/* Email + App password */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{preset.label} address</label>
+          <label htmlFor="provider-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{preset.label} address</label>
           <div className="relative">
             <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
+              id="provider-email" name="provider_email"
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(''); }}
@@ -166,10 +167,11 @@ function ProviderModal({ provider, onClose, onSaved }: ProviderModalProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">App Password</label>
+          <label htmlFor="provider-app-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">App Password</label>
           <div className="relative">
             <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
+              id="provider-app-password" name="provider_app_password"
               type="password"
               value={appPassword}
               onChange={(e) => { setAppPassword(e.target.value); setError(''); }}
@@ -180,14 +182,14 @@ function ProviderModal({ provider, onClose, onSaved }: ProviderModalProps) {
         </div>
 
         {/* Sender name + profile name */}
-        <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700 pt-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-gray-100 dark:border-gray-700 pt-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From name</label>
-            <input type="text" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name" className={inputClass} />
+            <label htmlFor="provider-sender-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From name</label>
+            <input id="provider-sender-name" name="sender_name" type="text" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="Your Name" className={inputClass} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Profile name</label>
-            <input type="text" value={profileName} onChange={(e) => { setProfileName(e.target.value); setError(''); }} className={inputClass} />
+            <label htmlFor="provider-profile-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Profile name</label>
+            <input id="provider-profile-name" name="profile_name" type="text" value={profileName} onChange={(e) => { setProfileName(e.target.value); setError(''); }} className={inputClass} />
           </div>
         </div>
 
@@ -206,7 +208,7 @@ function ProviderModal({ provider, onClose, onSaved }: ProviderModalProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={handleTest} loading={testStatus === 'testing'}>
               <Wifi size={13} />Test connection
@@ -321,8 +323,9 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
 
         {/* Profile name */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Profile name *</label>
+          <label htmlFor="profile-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Profile name *</label>
           <input
+            id="profile-name" name="profile_name"
             type="text"
             value={form.name}
             onChange={(e) => { set('name', e.target.value); setError(''); }}
@@ -338,16 +341,16 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
             <User size={14} className="text-indigo-500" />
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Sender Information</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From name</label>
-              <input type="text" value={form.sender_name} onChange={(e) => set('sender_name', e.target.value)} placeholder="Acme Newsletter" className={inputClass} />
+              <label htmlFor="profile-sender-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From name</label>
+              <input id="profile-sender-name" name="sender_name" type="text" value={form.sender_name} onChange={(e) => set('sender_name', e.target.value)} placeholder="Acme Newsletter" className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From email</label>
+              <label htmlFor="profile-sender-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From email</label>
               <div className="relative">
                 <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input type="email" value={form.sender_email} onChange={(e) => set('sender_email', e.target.value)} placeholder="newsletter@acme.com" className={`${inputClass} pl-9`} />
+                <input id="profile-sender-email" name="sender_email" type="email" value={form.sender_email} onChange={(e) => set('sender_email', e.target.value)} placeholder="newsletter@acme.com" className={`${inputClass} pl-9`} />
               </div>
             </div>
           </div>
@@ -397,26 +400,26 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
           )}
 
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Host</label>
-                <input type="text" value={form.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.gmail.com" className={inputClass} />
+                <label htmlFor="smtp-host" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Host</label>
+                <input id="smtp-host" name="smtp_host" type="text" value={form.smtp_host} onChange={(e) => set('smtp_host', e.target.value)} placeholder="smtp.gmail.com" className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Port</label>
-                <input type="number" value={form.smtp_port} onChange={(e) => set('smtp_port', e.target.value)} placeholder="587" className={inputClass} />
+                <label htmlFor="smtp-port" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Port</label>
+                <input id="smtp-port" name="smtp_port" type="number" value={form.smtp_port} onChange={(e) => set('smtp_port', e.target.value)} placeholder="587" className={inputClass} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username</label>
-                <input type="text" value={form.smtp_username} onChange={(e) => set('smtp_username', e.target.value)} placeholder="user@example.com" className={inputClass} />
+                <label htmlFor="smtp-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Username</label>
+                <input id="smtp-username" name="smtp_username" type="text" value={form.smtp_username} onChange={(e) => set('smtp_username', e.target.value)} placeholder="user@example.com" className={inputClass} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password</label>
+                <label htmlFor="smtp-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Password</label>
                 <div className="relative">
                   <Lock size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input type="password" value={form.smtp_password} onChange={(e) => set('smtp_password', e.target.value)} placeholder="••••••••" className={`${inputClass} pl-9`} />
+                  <input id="smtp-password" name="smtp_password" type="password" value={form.smtp_password} onChange={(e) => set('smtp_password', e.target.value)} placeholder="••••••••" className={`${inputClass} pl-9`} />
                 </div>
               </div>
             </div>
@@ -443,8 +446,9 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
           </div>
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Delay between emails (ms)</label>
+              <label htmlFor="smtp-rate-limit" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Delay between emails (ms)</label>
               <input
+                id="smtp-rate-limit" name="smtp_rate_limit"
                 type="number"
                 value={form.rate_limit_ms}
                 onChange={(e) => set('rate_limit_ms', Math.max(0, Number(e.target.value)))}
@@ -474,7 +478,7 @@ function ProfileModal({ profile, onClose, onSaved }: ProfileModalProps) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={handleTest} loading={testStatus === 'testing'}>
               <Wifi size={13} />
@@ -567,60 +571,57 @@ export function SenderProfilesPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sender Profiles</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Manage your SMTP configurations and sending identities
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selectedIds.length > 0 && (
-            <Button variant="danger" onClick={() => setBulkDeleteConfirm(true)}>
-              <Trash2 size={15} />
-              Delete ({selectedIds.length})
-            </Button>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sender Profiles</h2>
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setProviderDropdown((v) => !v)}
+            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+            title="Add sender profile"
+          >
+            <Plus size={18} />
+          </button>
+          {providerDropdown && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setProviderDropdown(false)} />
+              <div className="absolute right-0 mt-1 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+                {(Object.entries(SMTP_PRESETS) as [PresetKey, typeof SMTP_PRESETS[PresetKey]][]).map(([key, preset]) => (
+                  <button
+                    key={key}
+                    onClick={() => { setProviderModal(key); setProviderDropdown(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <img src={`https://www.google.com/s2/favicons?domain=${PROVIDER_DOMAINS[key]}&sz=16`} alt="" className="w-4 h-4" />
+                    {preset.label}
+                  </button>
+                ))}
+                <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+                <button
+                  onClick={() => { setEditingProfile(null); setProviderDropdown(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <Server size={14} className="text-gray-400" />
+                  Manual SMTP
+                </button>
+              </div>
+            </>
           )}
-          {/* Email provider dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setProviderDropdown((v) => !v)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
-            >
-              <Mail size={14} />
-              Add email account
-              <X size={12} className={`transition-transform duration-150 ${providerDropdown ? '' : 'rotate-45'} text-gray-400`} />
-            </button>
-            {providerDropdown && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setProviderDropdown(false)} />
-                <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
-                  {(Object.entries(SMTP_PRESETS) as [PresetKey, typeof SMTP_PRESETS[PresetKey]][]).map(([key, preset]) => (
-                    <button
-                      key={key}
-                      onClick={() => { setProviderModal(key); setProviderDropdown(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <img src={`https://www.google.com/s2/favicons?domain=${PROVIDER_DOMAINS[key]}&sz=16`} alt="" className="w-4 h-4" />
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-          <Button variant="primary" onClick={() => setEditingProfile(null)}>
-            <Plus size={15} />
-            Manual config
-          </Button>
         </div>
+      </div>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{profiles.length} profile{profiles.length !== 1 ? 's' : ''}</p>
+        {selectedIds.length > 0 && (
+          <Button variant="danger" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+            <Trash2 size={14} />Delete ({selectedIds.length})
+          </Button>
+        )}
       </div>
 
       {/* Search */}
       <div className="mb-4">
-        <div className="relative w-72">
+        <div className="relative w-full sm:w-72">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
@@ -638,7 +639,7 @@ export function SenderProfilesPage() {
       </div>
 
       {/* Profiles table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm mb-8">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto shadow-sm mb-8">
         {profiles.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-gray-400 dark:text-gray-500">
             No sender profiles yet. Create one to start sending campaigns.
@@ -932,7 +933,7 @@ function SecuritySection() {
       {/* Password option */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Password encryption</label>
-        <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
           <div>
             <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
               {encrypted && method === 'password' ? 'Change password' : 'Set password'}
@@ -952,7 +953,7 @@ function SecuritySection() {
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Passkey encryption</label>
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700">
             <div>
               <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
                 {encrypted && method === 'passkey' ? 'Change passkey' : 'Set passkey'}
@@ -988,7 +989,7 @@ function SecuritySection() {
       {encrypted && (
         <div>
           <label className="block text-sm font-medium text-red-600 dark:text-red-400 mb-3">Remove encryption</label>
-          <div className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-red-200 dark:border-red-900/50">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 rounded-lg border border-red-200 dark:border-red-900/50">
             <div>
               <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Remove encryption</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -1027,9 +1028,10 @@ function SecuritySection() {
             <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{pwError}</div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">New password</label>
+            <label htmlFor="security-new-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">New password</label>
             <div className="relative">
               <input
+                id="security-new-password" name="new_password"
                 type={showPw ? 'text' : 'password'}
                 value={newPassword}
                 onChange={(e) => { setNewPassword(e.target.value); setPwError(''); }}
@@ -1046,8 +1048,9 @@ function SecuritySection() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirm password</label>
+            <label htmlFor="security-confirm-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Confirm password</label>
             <input
+              id="security-confirm-password" name="confirm_password"
               type={showPw ? 'text' : 'password'}
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setPwError(''); }}
@@ -1262,7 +1265,7 @@ function DataSection() {
       {/* Export */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Export</label>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={handleExportJSON}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -1292,7 +1295,7 @@ function DataSection() {
         )}
         <div className="rounded-lg border border-red-200 dark:border-red-900/50 divide-y divide-red-100 dark:divide-red-900/30">
           {dangerItems.map(({ id, label, description }) => (
-            <div key={id} className="flex items-center justify-between gap-4 px-4 py-3">
+            <div key={id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3">
               <div>
                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{label}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{description}</p>
@@ -1335,28 +1338,30 @@ export function SettingsPage() {
   const [section, setSection] = useState<SettingsSection>('appearance');
 
   return (
-    <div className="flex h-full">
-      {/* Left category nav */}
-      <aside className="w-48 flex-shrink-0 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-4 space-y-0.5">
-        <p className="px-3 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Settings</p>
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setSection(s.id)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              section === s.id
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            {s.icon}
-            {s.label}
-          </button>
-        ))}
+    <div className="flex flex-col sm:flex-row h-full">
+      {/* Category nav — horizontal scrollable tabs on mobile, sidebar on sm+ */}
+      <aside className="flex-shrink-0 border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sm:w-48 sm:px-2 sm:py-4">
+        <p className="hidden sm:block px-3 pb-2 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Settings</p>
+        <div className="flex sm:flex-col overflow-x-auto sm:overflow-x-visible gap-1 px-2 py-2 sm:p-0 sm:space-y-0.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+          {SECTIONS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSection(s.id)}
+              className={`flex-shrink-0 flex items-center gap-2 sm:gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap sm:w-full ${
+                section === s.id
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              {s.icon}
+              {s.label}
+            </button>
+          ))}
+        </div>
       </aside>
 
       {/* Right content */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-5 sm:py-6">
         {section === 'appearance' && <AppearanceSection />}
         {section === 'editor' && <EditorSection />}
         {section === 'data' && <DataSection />}

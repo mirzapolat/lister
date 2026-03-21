@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  Search, Trash2, Download, Plus, Edit2, X, ChevronUp, ChevronDown, Check, Tag, FolderPlus,
+  Search, Trash2, Download, Plus, Edit2, X, ChevronUp, ChevronDown, Check, Tag, FolderPlus, MoreVertical,
 } from 'lucide-react';
 import {
   getAllSubscribers, deleteSubscribers, updateSubscriber,
@@ -93,15 +93,17 @@ function EditModal({ subscriber, allLists, allTags, onClose, onSaved, onDeleted 
           <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">{error}</div>
         )}
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+          <label htmlFor="subscriber-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
           <input
+            id="subscriber-email" name="subscriber_email"
             type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <label htmlFor="subscriber-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
           <input
+            id="subscriber-name" name="subscriber_name"
             type="text" value={name} onChange={(e) => setName(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           />
@@ -183,6 +185,7 @@ export function SubscribersPage() {
   const [inlineDeleteId, setInlineDeleteId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [showListDropdown, setShowListDropdown] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
   const [page, setPage] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -290,109 +293,134 @@ export function SubscribersPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Subscribers</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''} across all lists
-          </p>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Subscribers</h2>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Three-dot menu for export */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreMenu((v) => !v)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="More options"
+            >
+              <MoreVertical size={18} />
+            </button>
+            {showMoreMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMoreMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[180px]">
+                  <button
+                    onClick={() => { handleExport(false); setShowMoreMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    <Download size={14} />Export all
+                  </button>
+                  {selectedIds.length > 0 && (
+                    <button
+                      onClick={() => { handleExport(true); setShowMoreMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <Download size={14} />Export selected ({selectedIds.length})
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          {/* Plus button */}
+          <button
+            onClick={() => setShowImport(true)}
+            className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
+            title="Add Subscribers"
+          >
+            <Plus size={18} />
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-300 dark:text-gray-600 hidden sm:block">n add · / search</span>
-          {selectedIds.length > 0 && (
-            <>
-              {/* Tag dropdown */}
-              <div className="relative">
-                <Button variant="secondary" size="sm" onClick={() => { setShowTagDropdown((v) => !v); setShowListDropdown(false); }}>
-                  <Tag size={14} />Tag
-                </Button>
-                {showTagDropdown && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowTagDropdown(false)} />
-                    <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-3 w-64">
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                        Add tag to {selectedIds.length} subscriber{selectedIds.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className="flex gap-1.5 mb-2.5">
-                        <input
-                          autoFocus
-                          value={newTagInput}
-                          onChange={(e) => setNewTagInput(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleBulkAddTag(newTagInput)}
-                          placeholder="Tag name…"
-                          className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <Button size="sm" variant="primary" onClick={() => handleBulkAddTag(newTagInput)}>Apply</Button>
+      </div>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {subscribers.length} subscriber{subscribers.length !== 1 ? 's' : ''} across all lists
+        </p>
+        {selectedIds.length > 0 && (
+          <div className="flex items-center gap-2">
+            {/* Tag dropdown */}
+            <div className="relative">
+              <Button variant="secondary" size="sm" onClick={() => { setShowTagDropdown((v) => !v); setShowListDropdown(false); }}>
+                <Tag size={14} />Tag
+              </Button>
+              {showTagDropdown && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowTagDropdown(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg p-3 w-64">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                      Add tag to {selectedIds.length} subscriber{selectedIds.length !== 1 ? 's' : ''}
+                    </p>
+                    <div className="flex gap-1.5 mb-2.5">
+                      <input
+                        autoFocus
+                        value={newTagInput}
+                        onChange={(e) => setNewTagInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleBulkAddTag(newTagInput)}
+                        placeholder="Tag name…"
+                        className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <Button size="sm" variant="primary" onClick={() => handleBulkAddTag(newTagInput)}>Apply</Button>
+                    </div>
+                    {allTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {allTags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => handleBulkAddTag(tag)}
+                            className="px-2 py-0.5 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                          >
+                            {tag}
+                          </button>
+                        ))}
                       </div>
-                      {allTags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {allTags.map((tag) => (
-                            <button
-                              key={tag}
-                              onClick={() => handleBulkAddTag(tag)}
-                              className="px-2 py-0.5 text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                            >
-                              {tag}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            {/* Add to list dropdown */}
+            {allLists.length > 0 && (
+              <div className="relative">
+                <Button variant="secondary" size="sm" onClick={() => { setShowListDropdown((v) => !v); setShowTagDropdown(false); }}>
+                  <FolderPlus size={14} />Add to list
+                </Button>
+                {showListDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowListDropdown(false)} />
+                    <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 w-52">
+                      <p className="px-3 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">Add to list</p>
+                      {allLists.map((list) => (
+                        <button
+                          key={list.id}
+                          onClick={() => handleBulkAddToList(list.id)}
+                          className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <span className="truncate">{list.name}</span>
+                          <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{list.contact_count ?? 0}</span>
+                        </button>
+                      ))}
                     </div>
                   </>
                 )}
               </div>
-
-              {/* Add to list dropdown */}
-              {allLists.length > 0 && (
-                <div className="relative">
-                  <Button variant="secondary" size="sm" onClick={() => { setShowListDropdown((v) => !v); setShowTagDropdown(false); }}>
-                    <FolderPlus size={14} />Add to list
-                  </Button>
-                  {showListDropdown && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setShowListDropdown(false)} />
-                      <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1.5 w-52">
-                        <p className="px-3 pb-1 text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
-                          Add to list
-                        </p>
-                        {allLists.map((list) => (
-                          <button
-                            key={list.id}
-                            onClick={() => handleBulkAddToList(list.id)}
-                            className="w-full flex items-center justify-between px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                          >
-                            <span className="truncate">{list.name}</span>
-                            <span className="text-xs text-gray-400 ml-2 flex-shrink-0">{list.contact_count ?? 0}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <Button variant="secondary" size="sm" onClick={() => handleExport(true)}>
-                <Download size={14} />Export ({selectedIds.length})
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
-                <Trash2 size={14} />Delete ({selectedIds.length})
-              </Button>
-            </>
-          )}
-          <Button variant="secondary" size="sm" onClick={() => handleExport(false)}>
-            <Download size={14} />Export all
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => setShowImport(true)}>
-            <Plus size={14} />Add Subscribers
-          </Button>
-        </div>
+            )}
+            <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
+              <Trash2 size={14} />Delete ({selectedIds.length})
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
       <div className="mb-4">
-        <div className="relative w-72">
+        <div className="relative w-full sm:w-72">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             ref={searchRef}
