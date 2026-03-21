@@ -4,7 +4,7 @@ import { AlertCircle } from 'lucide-react';
 import {
   promptOpenFile, promptSaveNewFile, initSqlJs_,
   hasFileSystemApi, openDatabaseFromFileInput, createNewDatabaseFallback, downloadDatabase,
-  getStoredFileHandle, openDatabaseFromFile, closeDatabase,
+  getStoredFileHandle, openDatabaseFromFile, closeDatabase, clearStoredFileHandle,
 } from './db/database';
 import type { OpenResult } from './db/database';
 import type { EncryptionMethod } from './db/crypto';
@@ -193,6 +193,9 @@ export default function App() {
 
   const handleUnload = async () => {
     closeDatabase();
+    await clearStoredFileHandle();
+    localStorage.removeItem('lister-recent-filename');
+    setRecentFileName('');
     setStatus('welcome');
     setFileName('');
     setPage('lists');
