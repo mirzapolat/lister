@@ -3,8 +3,10 @@ import {
   Database, FolderOpen, Plus, AlertCircle, Clock,
   Shield, Lock, Mail, Zap, Users, PenLine, Palette,
   LayoutTemplate, Server, Fingerprint, WifiOff,
-  FileText, ArrowRight, CheckCircle,
+  FileText, ArrowRight, CheckCircle, Heart,
 } from 'lucide-react';
+
+const STRIPE_LINK = 'https://donate.stripe.com/aFa8wO78f6zndFp2xF0kE03';
 import { Modal } from './ui/Modal';
 
 // ── Privacy Policy ────────────────────────────────────────────────────────────
@@ -660,6 +662,16 @@ export function LandingPage({
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Lister</span>
           </div>
           <div className="flex items-center gap-5">
+            <a
+              href={STRIPE_LINK}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-500 dark:text-rose-400 dark:hover:text-rose-300 transition-colors font-medium"
+            >
+              <Heart size={11} className="fill-current" />
+              Support
+            </a>
+            <span className="text-gray-200 dark:text-gray-700">·</span>
             <button
               onClick={() => setShowPrivacy(true)}
               className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"

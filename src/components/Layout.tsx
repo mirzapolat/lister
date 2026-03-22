@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { List, Users, Send, Settings, Radio, Download, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen, Menu } from 'lucide-react';
+import { List, Users, Send, Settings, Radio, Download, ChevronLeft, ChevronRight, ChevronDown, LogOut, Palette, BookOpen, Menu, Heart } from 'lucide-react';
+
+const STRIPE_LINK = 'https://donate.stripe.com/aFa8wO78f6zndFp2xF0kE03';
 import type { Page } from '../types';
 
 interface NavChild {
@@ -243,6 +245,18 @@ export function Layout({ currentPage, fileName, onNavigate, onSave, onUnload, ch
 
         {/* Footer */}
         <div className="px-2 py-3 border-t border-white/10 space-y-1">
+          <a
+            href={STRIPE_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Support Lister"
+            className={`w-full flex items-center rounded-lg text-rose-400 hover:text-rose-300 hover:bg-white/5 text-sm transition-colors
+              ${collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2'}`}
+          >
+            <Heart size={14} className="fill-current flex-shrink-0" />
+            {!collapsed && <span className="font-medium">Support Lister</span>}
+          </a>
+
           {onSave && (
             <button
               onClick={onSave}
