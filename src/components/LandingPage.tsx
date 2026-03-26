@@ -1,196 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import {
-  Database, FolderOpen, Plus, AlertCircle, Clock,
+  Database, FolderOpen, Plus, AlertCircle,
   Shield, Lock, Mail, Zap, Users, PenLine, Palette,
   LayoutTemplate, Server, Fingerprint, WifiOff,
   FileText, ArrowRight, CheckCircle, Heart,
 } from 'lucide-react';
 
 const STRIPE_LINK = 'https://donate.stripe.com/aFa8wO78f6zndFp2xF0kE03';
-import { Modal } from './ui/Modal';
 
-// ── Privacy Policy ────────────────────────────────────────────────────────────
-
-function PrivacyPolicy() {
-  return (
-    <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 space-y-4 text-sm leading-relaxed">
-      <h2 className="text-base font-bold text-gray-900 dark:text-white">Datenschutzerklärung</h2>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">1. Verantwortlicher</h3>
-        <p>
-          Verantwortlicher im Sinne der Datenschutz-Grundverordnung (DSGVO) und anderer nationaler Datenschutzgesetze sowie sonstiger datenschutzrechtlicher Bestimmungen ist:
-        </p>
-        <p className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 italic">
-          [Name]<br />
-          [Straße, Hausnummer]<br />
-          [PLZ Ort]<br />
-          [E-Mail-Adresse]
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">2. Allgemeines zur Datenverarbeitung</h3>
-        <p>
-          Lister ist eine lokal betriebene Webanwendung. Alle von Ihnen eingegebenen Daten (Abonnentenlisten, Kampagnen, Einstellungen) werden ausschließlich lokal in Ihrem Browser gespeichert und verarbeitet. Eine Übermittlung dieser Daten an unsere Server oder Dritte findet nicht statt.
-        </p>
-        <p>
-          Wir verarbeiten personenbezogene Daten nur, soweit dies zur Bereitstellung einer funktionsfähigen Website sowie unserer Inhalte und Leistungen erforderlich ist. Eine Verarbeitung personenbezogener Daten unserer Nutzer erfolgt nur nach Einwilligung des Nutzers oder sofern eine Verarbeitung durch gesetzliche Vorschriften gestattet ist.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">3. Bereitstellung der Website und Erstellung von Logfiles</h3>
-        <p>
-          Bei jedem Aufruf unserer Website erfasst unser System automatisiert Daten und Informationen des abrufenden Computersystems. Folgende Daten werden dabei erhoben:
-        </p>
-        <ul className="list-disc pl-5 space-y-1 mt-2">
-          <li>Informationen über den Browsertyp und die verwendete Version</li>
-          <li>Das Betriebssystem des Nutzers</li>
-          <li>Die IP-Adresse des Nutzers (in anonymisierter Form)</li>
-          <li>Datum und Uhrzeit des Zugriffs</li>
-          <li>Websites, von denen das System des Nutzers auf unsere Internetseite gelangt</li>
-        </ul>
-        <p className="mt-2">
-          Die Speicherung in Logfiles erfolgt, um die Funktionsfähigkeit der Website sicherzustellen. Zudem dienen uns die Daten zur Optimierung der Website und zur Sicherstellung der Sicherheit unserer informationstechnischen Systeme. Eine Auswertung der Daten zu Marketingzwecken findet nicht statt.
-        </p>
-        <p className="mt-2">
-          Rechtsgrundlage für die vorübergehende Speicherung der Daten und der Logfiles ist Art. 6 Abs. 1 lit. f DSGVO. Die Daten werden gelöscht, sobald sie für die Erreichung des Zweckes ihrer Erhebung nicht mehr erforderlich sind, spätestens nach 7 Tagen.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">4. Lokale Speicherung (LocalStorage)</h3>
-        <p>
-          Diese Website verwendet die localStorage-Funktion Ihres Browsers ausschließlich zur Speicherung Ihrer Anzeigeeinstellungen (z. B. Farbschema Hell/Dunkel). Dabei werden keine personenbezogenen Daten erfasst. Die Nutzung von localStorage ist technisch notwendig und erfordert keine Einwilligung nach Art. 6 Abs. 1 lit. f DSGVO.
-        </p>
-        <p className="mt-2">
-          Sie können die gespeicherten Daten jederzeit über die Entwicklertools Ihres Browsers einsehen und löschen.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">5. Lokale Datenbankdateien</h3>
-        <p>
-          Die Anwendung Lister speichert alle Nutzerdaten (Abonnenten, Listen, Kampagnen) ausschließlich lokal auf Ihrem Gerät in einer SQLite-Datenbankdatei. Diese Datei wird weder an uns noch an Dritte übertragen. Die Verarbeitung findet vollständig in Ihrem Browser statt (Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO – Vertragserfüllung / Nutzung der Software).
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">6. Keine Weitergabe an Dritte</h3>
-        <p>
-          Eine Übermittlung Ihrer personenbezogenen Daten an Dritte zu anderen als den im Folgenden aufgeführten Zwecken findet nicht statt. Wir geben Ihre personenbezogenen Daten nur an Dritte weiter, wenn Sie eine ausdrückliche Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO erteilt haben oder eine gesetzliche Verpflichtung zur Weitergabe besteht (Art. 6 Abs. 1 lit. c DSGVO).
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">7. Keine Analyse- oder Tracking-Dienste</h3>
-        <p>
-          Diese Website verwendet keine Analyse- oder Tracking-Dienste (wie z. B. Google Analytics, Matomo o. Ä.). Es werden keine Nutzerprofile erstellt und keine Daten zu Werbezwecken erhoben oder weitergegeben.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">8. Rechte der betroffenen Personen</h3>
-        <p>Ihnen stehen gegenüber dem Verantwortlichen folgende Rechte zu:</p>
-        <ul className="list-disc pl-5 space-y-1 mt-2">
-          <li><strong>Auskunftsrecht</strong> (Art. 15 DSGVO): Sie haben das Recht, Auskunft über die zu Ihrer Person gespeicherten Daten zu erhalten.</li>
-          <li><strong>Recht auf Berichtigung</strong> (Art. 16 DSGVO): Sie haben das Recht, unrichtige Daten berichtigen zu lassen.</li>
-          <li><strong>Recht auf Löschung</strong> (Art. 17 DSGVO): Sie haben das Recht, die Löschung Ihrer Daten zu verlangen, sofern keine gesetzlichen Aufbewahrungspflichten entgegenstehen.</li>
-          <li><strong>Recht auf Einschränkung der Verarbeitung</strong> (Art. 18 DSGVO)</li>
-          <li><strong>Recht auf Datenübertragbarkeit</strong> (Art. 20 DSGVO)</li>
-          <li><strong>Widerspruchsrecht</strong> (Art. 21 DSGVO): Sie haben das Recht, der Verarbeitung Ihrer Daten zu widersprechen.</li>
-        </ul>
-        <p className="mt-2">
-          Zur Geltendmachung Ihrer Rechte wenden Sie sich bitte an die oben genannte Kontaktadresse des Verantwortlichen.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">9. Beschwerderecht bei einer Aufsichtsbehörde</h3>
-        <p>
-          Wenn Sie der Ansicht sind, dass die Verarbeitung Ihrer personenbezogenen Daten gegen die DSGVO verstößt, haben Sie gemäß Art. 77 DSGVO das Recht, sich bei einer Datenschutz-Aufsichtsbehörde zu beschweren – insbesondere in dem Mitgliedstaat Ihres gewöhnlichen Aufenthaltsorts, Ihres Arbeitsplatzes oder des Orts des mutmaßlichen Verstoßes.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">10. Aktualität und Änderung dieser Datenschutzerklärung</h3>
-        <p>
-          Diese Datenschutzerklärung ist aktuell gültig. Durch die Weiterentwicklung unserer Website oder aufgrund geänderter gesetzlicher bzw. behördlicher Vorgaben kann es notwendig werden, diese Datenschutzerklärung zu ändern. Die jeweils aktuelle Datenschutzerklärung kann jederzeit auf dieser Website abgerufen werden.
-        </p>
-      </section>
-    </div>
-  );
-}
-
-// ── Imprint ───────────────────────────────────────────────────────────────────
-
-function Imprint() {
-  return (
-    <div className="text-sm text-gray-700 dark:text-gray-300 space-y-4 leading-relaxed">
-      <h2 className="text-base font-bold text-gray-900 dark:text-white">Impressum</h2>
-      <p className="text-xs text-gray-500 dark:text-gray-400">Angaben gemäß § 5 TMG</p>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Anbieter</h3>
-        <p className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 italic">
-          [Vor- und Nachname / Firmenname]<br />
-          [Straße, Hausnummer]<br />
-          [PLZ Ort]<br />
-          [Land]
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Kontakt</h3>
-        <p className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 italic">
-          E-Mail: [E-Mail-Adresse]
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h3>
-        <p className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-gray-500 dark:text-gray-400 italic">
-          [Vor- und Nachname]<br />
-          [Anschrift wie oben]
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Streitschlichtung</h3>
-        <p>
-          Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:{' '}
-          <span className="text-indigo-600 dark:text-indigo-400">https://ec.europa.eu/consumers/odr/</span>.
-          Unsere E-Mail-Adresse finden Sie oben im Impressum.
-        </p>
-        <p className="mt-2">
-          Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Haftung für Inhalte</h3>
-        <p>
-          Als Diensteanbieter sind wir gemäß § 7 Abs. 1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen. Verpflichtungen zur Entfernung oder Sperrung der Nutzung von Informationen nach den allgemeinen Gesetzen bleiben hiervon unberührt.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Haftung für Links</h3>
-        <p>
-          Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben. Deshalb können wir für diese fremden Inhalte auch keine Gewähr übernehmen. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber der Seiten verantwortlich.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">Urheberrecht</h3>
-        <p>
-          Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht. Die Vervielfältigung, Bearbeitung, Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechtes bedürfen der schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.
-        </p>
-      </section>
-    </div>
-  );
-}
 
 // ── App Mockup ────────────────────────────────────────────────────────────────
 
@@ -397,8 +214,6 @@ const WHY_POINTS = [
 interface LandingPageProps {
   onOpenFile: () => void;
   onNewFile: () => void;
-  onOpenRecent?: () => void;
-  recentFileName?: string;
   error: string;
   fsApi: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -406,11 +221,9 @@ interface LandingPageProps {
 }
 
 export function LandingPage({
-  onOpenFile, onNewFile, onOpenRecent, recentFileName,
+  onOpenFile, onNewFile,
   error, fileInputRef, onFileInputChange,
 }: LandingPageProps) {
-  const [showPrivacy, setShowPrivacy] = useState(false);
-  const [showImprint, setShowImprint] = useState(false);
 
   // Inject distinctive display font
   useEffect(() => {
@@ -479,16 +292,6 @@ export function LandingPage({
               </button>
             </div>
 
-            {/* Recent file */}
-            {onOpenRecent && recentFileName && (
-              <button
-                onClick={onOpenRecent}
-                className="flex items-center gap-2 text-sm text-gray-400 dark:text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                <Clock size={13} />
-                Continue with <span className="font-medium text-gray-600 dark:text-gray-300 truncate max-w-[200px]">{recentFileName}</span>
-              </button>
-            )}
 
 
             {/* Error */}
@@ -640,15 +443,6 @@ export function LandingPage({
               Open existing file
             </button>
           </div>
-          {onOpenRecent && recentFileName && (
-            <button
-              onClick={onOpenRecent}
-              className="mt-4 flex items-center gap-2 text-sm text-indigo-300 hover:text-white mx-auto transition-colors"
-            >
-              <Clock size={13} />
-              Continue with <span className="font-medium">{recentFileName}</span>
-            </button>
-          )}
         </div>
       </section>
 
@@ -671,20 +465,6 @@ export function LandingPage({
               <Heart size={11} className="fill-current" />
               Support
             </a>
-            <span className="text-gray-200 dark:text-gray-700">·</span>
-            <button
-              onClick={() => setShowPrivacy(true)}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            >
-              Datenschutz
-            </button>
-            <span className="text-gray-200 dark:text-gray-700">·</span>
-            <button
-              onClick={() => setShowImprint(true)}
-              className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-            >
-              Impressum
-            </button>
           </div>
         </div>
       </footer>
@@ -698,19 +478,6 @@ export function LandingPage({
         onChange={onFileInputChange}
       />
 
-      {/* Privacy modal */}
-      <Modal isOpen={showPrivacy} onClose={() => setShowPrivacy(false)} title="Datenschutzerklärung" size="lg">
-        <div className="max-h-[65vh] overflow-y-auto pr-1">
-          <PrivacyPolicy />
-        </div>
-      </Modal>
-
-      {/* Imprint modal */}
-      <Modal isOpen={showImprint} onClose={() => setShowImprint(false)} title="Impressum" size="lg">
-        <div className="max-h-[65vh] overflow-y-auto pr-1">
-          <Imprint />
-        </div>
-      </Modal>
     </div>
   );
 }

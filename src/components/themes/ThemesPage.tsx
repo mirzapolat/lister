@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Check, Copy, Trash2, Plus, Star, Search, X, Download, Upload, MoreVertical, SlidersHorizontal } from 'lucide-react';
+import { Check, Copy, Trash2, Plus, Star, Search, X, Download, Upload, MoreVertical } from 'lucide-react';
 import { Marked } from 'marked';
 import { getThemes, createTheme, updateTheme, deleteTheme, setDefaultTheme } from '../../db/database';
 import type { EmailTheme } from '../../types';
@@ -235,15 +235,12 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
             </button>
           )}
           {onDelete && (
-            <>
-              <button
-                onClick={onDelete}
-                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-              >
-                <Trash2 size={13} />Delete
-              </button>
-              <div className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-gray-600" />
-            </>
+            <button
+              onClick={onDelete}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            >
+              <Trash2 size={13} />Delete
+            </button>
           )}
           <div className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-gray-600" />
 
@@ -378,133 +375,6 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
   );
 }
 
-// ── ThemePreviewModal ─────────────────────────────────────────────────────────
-
-interface ThemePreviewModalProps {
-  theme: EmailTheme;
-  onClose: () => void;
-  onSetDefault: () => void;
-  onDuplicateAndEdit: () => void;
-  onDelete: () => void;
-}
-
-function ThemePreviewModal({ theme, onClose, onSetDefault, onDuplicateAndEdit, onDelete }: ThemePreviewModalProps) {
-  const previewDoc = useMemo(() => renderPreview(theme.template_html), [theme.template_html]);
-  const isDefault = theme.is_default === 1;
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const raf1 = requestAnimationFrame(() => {
-      requestAnimationFrame(() => setVisible(true));
-    });
-    return () => cancelAnimationFrame(raf1);
-  }, []);
-
-  const handleClose = () => {
-    setVisible(false);
-    setTimeout(onClose, 320);
-  };
-
-  const header = (
-    <>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{theme.name}</h3>
-          {isDefault && (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
-              <Check size={9} />Default
-            </span>
-          )}
-          <span className="text-xs text-gray-400">Built-in</span>
-        </div>
-        {theme.description && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{theme.description}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
-        <button
-          onClick={onSetDefault}
-          disabled={isDefault}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            isDefault
-              ? 'text-indigo-400 dark:text-indigo-500 cursor-default'
-              : 'text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-          }`}
-        >
-          <Star size={12} className={isDefault ? 'fill-current' : ''} />
-          <span className="hidden sm:inline">{isDefault ? 'Default' : 'Set default'}</span>
-        </button>
-        <button
-          onClick={onDuplicateAndEdit}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
-        >
-          <Copy size={12} /><span className="hidden sm:inline">Duplicate &amp; </span>Edit
-        </button>
-        <button
-          onClick={onDelete}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-          title="Delete theme"
-        >
-          <Trash2 size={12} /><span className="hidden sm:inline">Delete</span>
-        </button>
-      </div>
-    </>
-  );
-
-  return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
-        onClick={handleClose}
-      />
-
-      {/* Mobile: bottom sheet */}
-      <div
-        className="sm:hidden fixed inset-x-0 bottom-0 z-10 flex flex-col bg-white dark:bg-gray-800 rounded-t-2xl shadow-2xl overflow-hidden transition-transform duration-300 ease-out"
-        style={{ height: '88dvh', transform: visible ? 'translateY(0)' : 'translateY(100%)' }}
-      >
-        <div className="flex justify-center pt-2.5 pb-0.5 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-        </div>
-        <div className="flex items-center px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 gap-2">
-          {header}
-          <button onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0">
-            <X size={18} />
-          </button>
-        </div>
-        <iframe
-          srcDoc={previewDoc}
-          className="flex-1 w-full border-none min-h-0"
-          sandbox="allow-same-origin"
-          title={`Full preview of ${theme.name}`}
-        />
-      </div>
-
-      {/* Desktop: centered card */}
-      <div className="hidden sm:flex fixed inset-0 items-center justify-center p-6">
-        <div
-          className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden z-10 w-full max-w-2xl max-h-[90vh] transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-        >
-          <div className="flex items-center px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex-shrink-0 gap-2">
-            {header}
-            <button onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0 ml-1">
-              <X size={16} />
-            </button>
-          </div>
-          <iframe
-            srcDoc={previewDoc}
-            className="flex-1 w-full border-none min-h-0"
-            sandbox="allow-same-origin"
-            title={`Full preview of ${theme.name}`}
-            style={{ minHeight: '480px' }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── ThemeCard ────────────────────────────────────────────────────────────────
 
 interface ThemeCardProps {
@@ -518,7 +388,6 @@ interface ThemeCardProps {
 function ThemeCard({ theme, onClick, onSetDefault, onDuplicateAndEdit, onDelete }: ThemeCardProps) {
   const previewDoc = useMemo(() => renderPreview(theme.template_html), [theme.template_html]);
   const isDefault = theme.is_default === 1;
-  const isBuiltin = theme.is_builtin === 1;
 
   return (
     <div
@@ -557,9 +426,6 @@ function ThemeCard({ theme, onClick, onSetDefault, onDuplicateAndEdit, onDelete 
       <div className="px-3 py-2.5 flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-gray-900 dark:text-white truncate leading-tight">{theme.name}</p>
-          <span className={`text-xs ${isBuiltin ? 'text-gray-400 dark:text-gray-500' : 'text-purple-500 dark:text-purple-400'}`}>
-            {isBuiltin ? 'Built-in' : 'Custom'}
-          </span>
         </div>
 
         <div className="flex items-center gap-0 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -574,7 +440,7 @@ function ThemeCard({ theme, onClick, onSetDefault, onDuplicateAndEdit, onDelete 
 
           <button
             onClick={onDuplicateAndEdit}
-            title={isBuiltin ? 'Duplicate & Edit' : 'Duplicate'}
+            title="Duplicate"
             className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
             <Copy size={12} />
@@ -595,53 +461,31 @@ function ThemeCard({ theme, onClick, onSetDefault, onDuplicateAndEdit, onDelete 
 
 // ── ThemesPage ───────────────────────────────────────────────────────────────
 
-type FilterType = 'all' | 'preset' | 'custom';
-
-const filterTabs: { id: FilterType; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'preset', label: 'Presets' },
-  { id: 'custom', label: 'Custom' },
-];
 
 export function ThemesPage() {
   const [themes, setThemes] = useState<EmailTheme[]>([]);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('all');
   const [editorTheme, setEditorTheme] = useState<EmailTheme | null | undefined>(undefined); // undefined = closed, null = new
   const [deleteTarget, setDeleteTarget] = useState<EmailTheme | null>(null);
-  const [previewTarget, setPreviewTarget] = useState<EmailTheme | null>(null);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const load = () => setThemes(getThemes());
   useEffect(() => { load(); }, []);
 
-  const customCount = themes.filter((t) => t.is_builtin === 0).length;
-
   const filtered = useMemo(() => {
-    let result = themes;
-    if (filter === 'preset') result = result.filter((t) => t.is_builtin === 1);
-    else if (filter === 'custom') result = result.filter((t) => t.is_builtin === 0);
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((t) =>
-        t.name.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q)
-      );
-    }
-    return result;
-  }, [themes, filter, search]);
+    if (!search) return themes;
+    const q = search.toLowerCase();
+    return themes.filter((t) =>
+      t.name.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q)
+    );
+  }, [themes, search]);
 
   const openEditor = (theme: EmailTheme | null) => {
     setEditorTheme(theme);
-    setPreviewTarget(null);
   };
 
   const handleCardClick = (theme: EmailTheme) => {
-    if (theme.is_builtin === 0) {
-      openEditor(theme); // custom → edit directly
-    } else {
-      setPreviewTarget(theme); // preset → preview modal
-    }
+    openEditor(theme);
   };
 
   const handleDuplicateAndEdit = (theme: EmailTheme) => {
@@ -755,7 +599,7 @@ export function ThemesPage() {
         <p className="text-sm text-gray-500 dark:text-gray-400">{themes.length} theme{themes.length !== 1 ? 's' : ''}</p>
       </div>
 
-      {/* Search + Filter row */}
+      {/* Search row */}
       <div className="flex items-center gap-2 mb-5">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -772,54 +616,13 @@ export function ThemesPage() {
             </button>
           )}
         </div>
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowFilterMenu((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
-              filter !== 'all'
-                ? 'bg-indigo-600 border-indigo-600 text-white'
-                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-            title="Filter"
-          >
-            <SlidersHorizontal size={14} />
-            <span className="hidden sm:inline">
-              {filter === 'all' ? 'Filter' : filterTabs.find((t) => t.id === filter)?.label}
-            </span>
-          </button>
-          {showFilterMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
-                {filterTabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => { setFilter(tab.id); setShowFilterMenu(false); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                      filter === tab.id
-                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {tab.label}
-                    {tab.id !== 'all' && (
-                      <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
-                        {tab.id === 'preset' ? themes.filter((t) => t.is_builtin === 1).length : customCount}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <p className="text-sm">
-            {search || filter !== 'all' ? 'No themes match your filters.' : 'No themes found. Try reopening your database to seed built-in themes.'}
+            {search ? 'No themes match your search.' : 'No themes yet. Create one or import from HTML.'}
           </p>
         </div>
       ) : (
@@ -835,17 +638,6 @@ export function ThemesPage() {
             />
           ))}
         </div>
-      )}
-
-      {/* Preset preview modal */}
-      {previewTarget && (
-        <ThemePreviewModal
-          theme={previewTarget}
-          onClose={() => setPreviewTarget(null)}
-          onSetDefault={() => { handleSetDefault(previewTarget); setPreviewTarget({ ...previewTarget, is_default: 1 }); }}
-          onDuplicateAndEdit={() => handleDuplicateAndEdit(previewTarget)}
-          onDelete={() => { setPreviewTarget(null); setDeleteTarget(previewTarget); }}
-        />
       )}
 
       {/* Editor (new / edit / import draft) */}

@@ -1275,12 +1275,7 @@ function LoadTemplateModal({ onClose, onLoad }: LoadTemplateModalProps) {
                   onClick={() => onLoad(t)}
                   className="w-full px-6 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">{t.name}</span>
-                    {t.is_builtin === 1 && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium">Preset</span>
-                    )}
-                  </div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{t.name}</span>
                   {t.subject && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t.subject}</p>}
                   {t.description && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">{t.description}</p>}
                 </button>

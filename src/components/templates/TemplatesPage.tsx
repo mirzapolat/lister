@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Copy, Trash2, Edit2, Search, X, Download, Upload, BookOpen, MoreVertical, SlidersHorizontal } from 'lucide-react';
+import { Plus, Copy, Trash2, Edit2, Search, X, Download, Upload, BookOpen, MoreVertical } from 'lucide-react';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate, duplicateTemplate } from '../../db/database';
 import type { EmailTemplate } from '../../types';
 import { Button } from '../ui/Button';
@@ -7,7 +7,6 @@ import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { useHotkey } from '../../hooks/useHotkey';
 
-type Filter = 'all' | 'preset' | 'custom';
 type SortKey = 'name' | 'subject' | 'created_at';
 
 function formatDate(dt: string) {
@@ -163,7 +162,6 @@ interface TemplatesPageProps {
 
 export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
-  const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -174,7 +172,6 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<EmailTemplate | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -190,8 +187,6 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
 
   const filtered = useMemo(() => {
     let result = [...templates];
-    if (filter === 'preset') result = result.filter((t) => t.is_builtin === 1);
-    if (filter === 'custom') result = result.filter((t) => t.is_builtin === 0);
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
@@ -204,7 +199,7 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
       const cmp = av.localeCompare(bv);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [templates, filter, search, sortKey, sortDir]);
+  }, [templates, search, sortKey, sortDir]);
 
   const handleDuplicate = (t: EmailTemplate, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -270,12 +265,7 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
       sortable: true,
       render: (t) => (
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900 dark:text-white">{t.name}</span>
-            {t.is_builtin === 1 && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-medium">Preset</span>
-            )}
-          </div>
+          <span className="text-sm font-medium text-gray-900 dark:text-white">{t.name}</span>
           {t.description && (
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate max-w-xs">{t.description}</p>
           )}
@@ -316,15 +306,13 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
           >
             <Copy size={14} />
           </button>
-          {t.is_builtin === 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setEditorTemplate(t); }}
-              className="p-1.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-              title="Edit"
-            >
-              <Edit2 size={14} />
-            </button>
-          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditorTemplate(t); }}
+            className="p-1.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            title="Edit"
+          >
+            <Edit2 size={14} />
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); setDeleteConfirm(t); }}
             className="p-1.5 rounded text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -336,12 +324,6 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
       ),
     },
   ];
-
-  const filterCounts = {
-    all: templates.length,
-    preset: templates.filter((t) => t.is_builtin === 1).length,
-    custom: templates.filter((t) => t.is_builtin === 0).length,
-  };
 
   const selectedDeletable = selectedIds;
 
@@ -428,43 +410,6 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
             </button>
           )}
         </div>
-        <div className="relative flex-shrink-0">
-          <button
-            onClick={() => setShowFilterMenu((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-              filter !== 'all'
-                ? 'bg-indigo-600 border-indigo-600 text-white'
-                : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-            }`}
-            title="Filter"
-          >
-            <SlidersHorizontal size={14} />
-            <span className="hidden sm:inline">
-              {filter === 'all' ? 'Filter' : filter === 'preset' ? 'Presets' : 'Custom'}
-            </span>
-          </button>
-          {showFilterMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 min-w-[140px]">
-                {([['all', 'All', filterCounts.all], ['preset', 'Presets', filterCounts.preset], ['custom', 'Custom', filterCounts.custom]] as [Filter, string, number][]).map(([f, label, count]) => (
-                  <button
-                    key={f}
-                    onClick={() => { setFilter(f); setShowFilterMenu(false); }}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                      filter === f
-                        ? 'text-indigo-600 dark:text-indigo-400 font-medium'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {label}
-                    <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{count}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Table */}
@@ -480,8 +425,8 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
           onSort={handleSort}
           onRowClick={(t) => setPreviewTemplate(t)}
           emptyMessage={
-            search || filter !== 'all'
-              ? 'No templates match your filters.'
+            search
+              ? 'No templates match your search.'
               : 'No templates yet. Create one or import from JSON.'
           }
         />
@@ -506,11 +451,9 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" size="sm" onClick={() => setPreviewTemplate(null)}>Close</Button>
-              {previewTemplate.is_builtin === 0 && (
-                <Button variant="secondary" size="sm" onClick={() => { setEditorTemplate(previewTemplate); setPreviewTemplate(null); }}>
-                  <Edit2 size={13} />Edit
-                </Button>
-              )}
+              <Button variant="secondary" size="sm" onClick={() => { setEditorTemplate(previewTemplate); setPreviewTemplate(null); }}>
+                <Edit2 size={13} />Edit
+              </Button>
               {onUseTemplate && (
                 <Button variant="primary" size="sm" onClick={() => { onUseTemplate(previewTemplate); setPreviewTemplate(null); }}>
                   <BookOpen size={13} />Use in Campaign

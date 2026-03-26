@@ -131,8 +131,8 @@ async function initializeLoadedDb(): Promise<void> {
     db.run('ALTER TABLE campaigns ADD COLUMN theme_id INTEGER');
   }
   db.run(MIGRATION_SQL);
-  seedBuiltinThemes();
-  seedBuiltinTemplates();
+  // Migration: clear is_builtin flag on existing themes/templates so they behave as normal entries
+  migrateBuiltinFlags();
 }
 
 export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promise<OpenResult> {
@@ -1051,14 +1051,14 @@ function rowsToThemes(columns: string[], values: (string | number | null)[][]): 
 }
 
 export function getThemes(): EmailTheme[] {
-  const result = getDb().exec('SELECT * FROM themes ORDER BY is_builtin DESC, is_default DESC, created_at ASC');
+  const result = getDb().exec('SELECT * FROM themes ORDER BY is_default DESC, created_at ASC');
   if (!result.length) return [];
   const [{ columns, values }] = result;
   return rowsToThemes(columns, values as (string | number | null)[][]);
 }
 
 export function getDefaultTheme(): EmailTheme | null {
-  const result = getDb().exec('SELECT * FROM themes ORDER BY is_default DESC, is_builtin DESC, created_at ASC LIMIT 1');
+  const result = getDb().exec('SELECT * FROM themes ORDER BY is_default DESC, created_at ASC LIMIT 1');
   if (!result.length || !result[0].values.length) return null;
   const { columns, values } = result[0];
   return rowsToThemes(columns, values as (string | number | null)[][])[0];
@@ -1102,36 +1102,18 @@ export function seedBuiltinThemes(): void {
   const database = getDb();
   for (let i = 0; i < BUILTIN_THEMES.length; i++) {
     const t = BUILTIN_THEMES[i];
-    const exists = database.exec(
-      `SELECT id FROM themes WHERE name = '${t.name.replace(/'/g, "''")}' AND is_builtin = 1`
+    database.run(
+      'INSERT INTO themes (name, description, template_html, is_default, is_builtin) VALUES (?, ?, ?, ?, 0)',
+      [t.name, t.description, t.template_html, i === 0 ? 1 : 0]
     );
-    if (!exists.length || !exists[0].values.length) {
-      database.run(
-        'INSERT INTO themes (name, description, template_html, is_default, is_builtin) VALUES (?, ?, ?, ?, 1)',
-        [t.name, t.description, t.template_html, i === 0 ? 1 : 0]
-      );
-    } else {
-      // Keep template up to date when built-in themes change
-      database.run(
-        'UPDATE themes SET template_html = ?, description = ? WHERE name = ? AND is_builtin = 1',
-        [t.template_html, t.description, t.name]
-      );
-    }
   }
-  // Migration: transfer default from 'Clean' to 'Clean (No Footer)' if user hasn't set a custom default
-  const noFooterRow = database.exec(
-    "SELECT id, is_default FROM themes WHERE name = 'Clean (No Footer)' AND is_builtin = 1"
-  );
-  const cleanRow = database.exec(
-    "SELECT is_default FROM themes WHERE name = 'Clean' AND is_builtin = 1"
-  );
-  const noFooterId = noFooterRow[0]?.values[0]?.[0] as number | undefined;
-  const noFooterIsDefault = noFooterRow[0]?.values[0]?.[1] as number | undefined;
-  const cleanIsDefault = cleanRow[0]?.values[0]?.[0] as number | undefined;
-  if (noFooterId && !noFooterIsDefault && cleanIsDefault === 1) {
-    database.run('UPDATE themes SET is_default = 0 WHERE name = ? AND is_builtin = 1', ['Clean']);
-    database.run('UPDATE themes SET is_default = 1 WHERE id = ?', [noFooterId]);
-  }
+}
+
+// One-time migration: clear is_builtin flag so old databases treat preset themes/templates as normal entries
+function migrateBuiltinFlags(): void {
+  const database = getDb();
+  database.run('UPDATE themes SET is_builtin = 0 WHERE is_builtin = 1');
+  database.run('UPDATE templates SET is_builtin = 0 WHERE is_builtin = 1');
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
@@ -1145,7 +1127,7 @@ function rowsToTemplates(columns: string[], values: (string | number | null)[][]
 }
 
 export function getTemplates(): EmailTemplate[] {
-  const result = getDb().exec('SELECT * FROM templates ORDER BY is_builtin DESC, created_at ASC');
+  const result = getDb().exec('SELECT * FROM templates ORDER BY created_at ASC');
   if (!result.length) return [];
   const [{ columns, values }] = result;
   return rowsToTemplates(columns, values as (string | number | null)[][]);
@@ -1238,8 +1220,8 @@ export function exportAllData(): object {
     subscribers: queryAllRows('SELECT * FROM subscribers'),
     list_subscribers: queryAllRows('SELECT * FROM list_subscribers'),
     subscriber_tags: queryAllRows('SELECT * FROM subscriber_tags'),
-    templates: queryAllRows('SELECT * FROM templates WHERE is_builtin=0'),
-    themes: queryAllRows('SELECT * FROM themes WHERE is_builtin=0'),
+    templates: queryAllRows('SELECT * FROM templates'),
+    themes: queryAllRows('SELECT * FROM themes'),
     bounces: queryAllRows('SELECT * FROM bounces'),
   };
 }
@@ -1263,17 +1245,9 @@ export function exportSubscribersCSV(): string {
 export function seedBuiltinTemplates(): void {
   const database = getDb();
   for (const t of BUILTIN_TEMPLATES) {
-    const alreadyExists = queryExists('SELECT id FROM templates WHERE name = ? AND is_builtin = 1', [t.name]);
-    if (!alreadyExists) {
-      database.run(
-        'INSERT INTO templates (name, description, subject, body, is_builtin) VALUES (?, ?, ?, ?, 1)',
-        [t.name, t.description, t.subject, t.body]
-      );
-    } else {
-      database.run(
-        'UPDATE templates SET subject=?, body=?, description=? WHERE name=? AND is_builtin=1',
-        [t.subject, t.body, t.description, t.name]
-      );
-    }
+    database.run(
+      'INSERT INTO templates (name, description, subject, body, is_builtin) VALUES (?, ?, ?, ?, 0)',
+      [t.name, t.description, t.subject, t.body]
+    );
   }
 }

@@ -54,7 +54,6 @@ export default function App() {
   const [status, setStatus] = useState<AppStatus>('loading');
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
-  const [recentFileName, setRecentFileName] = useState(() => localStorage.getItem('lister-recent-filename') ?? '');
   const [page, setPage] = useState<Page>('lists');
   const [selectedListId, setSelectedListId] = useState<number | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
@@ -77,7 +76,6 @@ export default function App() {
 
   const saveRecentFile = (name: string) => {
     localStorage.setItem('lister-recent-filename', name);
-    setRecentFileName(name);
   };
 
   useEffect(() => {
@@ -94,8 +92,8 @@ export default function App() {
             if (granted === 'granted') {
               const result = await openDatabaseFromFile(handle);
               if (result.status === 'needs-auth') {
+                // Don't auto-prompt for password — let the user choose to open the file
                 setStatus('welcome');
-                setPendingAuth({ method: result.method, salt: result.salt, fileName: result.fileName });
                 return;
               }
               setFileName(result.fileName);
@@ -127,31 +125,6 @@ export default function App() {
     }
   };
 
-  const handleOpenRecent = async () => {
-    try {
-      setError('');
-      const handle = await getStoredFileHandle();
-      if (handle) {
-        const h = handle as unknown as { queryPermission(o: object): Promise<string>; requestPermission(o: object): Promise<string> };
-        const perm = await h.queryPermission({ mode: 'readwrite' });
-        const granted = perm === 'granted'
-          ? 'granted'
-          : await h.requestPermission({ mode: 'readwrite' });
-        if (granted === 'granted') {
-          const result = await openDatabaseFromFile(handle);
-          if (!handleOpenResult(result)) return;
-          setStatus('ready');
-          return;
-        }
-        setError('Permission denied — please open the file manually.');
-      } else {
-        // Handle was cleared (e.g. after unload); fall back to file picker
-        handleOpenFile();
-      }
-    } catch (e) {
-      setError(String(e));
-    }
-  };
 
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -195,7 +168,6 @@ export default function App() {
     closeDatabase();
     await clearStoredFileHandle();
     localStorage.removeItem('lister-recent-filename');
-    setRecentFileName('');
     setStatus('welcome');
     setFileName('');
     setPage('lists');
@@ -250,8 +222,6 @@ export default function App() {
         <LandingPage
           onOpenFile={handleOpenFile}
           onNewFile={handleNewFile}
-          onOpenRecent={recentFileName && fsApi ? handleOpenRecent : undefined}
-          recentFileName={recentFileName}
           error={error}
           fsApi={fsApi}
           fileInputRef={fileInputRef}
