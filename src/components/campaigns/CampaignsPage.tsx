@@ -42,7 +42,7 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
   };
 
   const filtered = useMemo(() => {
-    let result = campaigns.filter((c) => filter === 'all' || c.status === filter);
+    let result = campaigns.filter((c) => filter === 'all' || c.status === filter || (filter === 'sent' && c.status === 'sending'));
     if (search) {
       const q = search.toLowerCase();
       result = result.filter((c) => c.name.toLowerCase().includes(q) || c.subject.toLowerCase().includes(q));
@@ -83,16 +83,20 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
     refresh();
   };
 
-  const statusBadge = (status: string) => (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-      status === 'sent'
-        ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-        : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-    }`}>
-      {status === 'sent' ? <SendIcon size={10} /> : null}
-      {status === 'sent' ? 'Sent' : 'Draft'}
-    </span>
-  );
+  const statusBadge = (status: string) => {
+    const styles = status === 'sent'
+      ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+      : status === 'sending'
+      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+      : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
+    const label = status === 'sent' ? 'Sent' : status === 'sending' ? 'Sending' : 'Draft';
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${styles}`}>
+        {status === 'sent' ? <SendIcon size={10} /> : null}
+        {label}
+      </span>
+    );
+  };
 
   const columns = [
     {
@@ -120,15 +124,13 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
       className: 'text-right',
       render: (row: Campaign) => (
         <div className="flex items-center justify-end gap-1">
-          {row.status !== 'sent' && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onEditCampaign(row.id); }}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-              title="Edit"
-            >
-              <Edit2 size={14} />
-            </button>
-          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); onEditCampaign(row.id); }}
+            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+            title={row.status === 'sent' ? 'View' : 'Edit'}
+          >
+            <Edit2 size={14} />
+          </button>
           <button
             onClick={(e) => handleDuplicate(row.id, e)}
             className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
@@ -241,15 +243,7 @@ export function CampaignsPage({ onCreateCampaign, onEditCampaign }: CampaignsPag
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
-          onRowClick={(row) => {
-            if (row.status === 'sent') {
-              const newId = duplicateCampaign(row.id);
-              refresh();
-              onEditCampaign(newId);
-            } else {
-              onEditCampaign(row.id);
-            }
-          }}
+          onRowClick={(row) => onEditCampaign(row.id)}
           emptyMessage={
             search
               ? 'No campaigns match your search.'

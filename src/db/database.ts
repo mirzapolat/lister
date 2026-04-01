@@ -527,7 +527,7 @@ export function getCampaign(id: number): Campaign | null {
 }
 
 export function createCampaign(
-  name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent',
+  name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sending' | 'sent',
   senderProfileId?: number | null, themeId?: number | null,
 ): number {
   getDb().run(
@@ -541,7 +541,7 @@ export function createCampaign(
 }
 
 export function updateCampaign(
-  id: number, name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sent',
+  id: number, name: string, subject: string, body: string, listId: number | null, status: 'draft' | 'sending' | 'sent',
   senderProfileId?: number | null, themeId?: number | null,
 ): void {
   const sentAt = status === 'sent' ? new Date().toISOString() : null;
@@ -1038,6 +1038,62 @@ export function getCampaignSendsForSubscriber(subscriberId: number): CampaignSen
     result.columns.forEach((col, i) => { obj[col] = row[i]; });
     return obj as unknown as CampaignSend;
   });
+}
+
+export function getCampaignSends(campaignId: number): CampaignSend[] {
+  const result = queryRows(
+    `SELECT cs.id, cs.campaign_id, cs.subscriber_id, cs.sent_at, cs.status, cs.error,
+            c.name as campaign_name, c.subject as campaign_subject,
+            s.email as subscriber_email, s.name as subscriber_name
+     FROM campaign_sends cs
+     LEFT JOIN campaigns c ON c.id = cs.campaign_id
+     LEFT JOIN subscribers s ON s.id = cs.subscriber_id
+     WHERE cs.campaign_id = ?
+     ORDER BY cs.sent_at DESC`,
+    [campaignId]
+  );
+  if (!result) return [];
+  return result.values.map((row) => {
+    const obj: Record<string, unknown> = {};
+    result.columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj as unknown as CampaignSend;
+  });
+}
+
+export function getAlreadySentSubscriberIds(campaignId: number): Set<number> {
+  const result = queryRows(
+    `SELECT subscriber_id FROM campaign_sends WHERE campaign_id = ? AND status = 'sent'`,
+    [campaignId]
+  );
+  if (!result) return new Set();
+  return new Set(result.values.map((row) => row[0] as number));
+}
+
+export function getFailedSubscriberIds(campaignId: number): Set<number> {
+  // Returns subscriber IDs that have a 'failed' record but no 'sent' record for this campaign
+  const result = queryRows(
+    `SELECT DISTINCT cs.subscriber_id
+     FROM campaign_sends cs
+     WHERE cs.campaign_id = ? AND cs.status = 'failed'
+       AND cs.subscriber_id NOT IN (
+         SELECT subscriber_id FROM campaign_sends WHERE campaign_id = ? AND status = 'sent'
+       )`,
+    [campaignId, campaignId]
+  );
+  if (!result) return new Set();
+  return new Set(result.values.map((row) => row[0] as number));
+}
+
+export function clearFailedSends(campaignId: number): void {
+  // Remove failed send records so they can be retried cleanly
+  getDb().run(
+    `DELETE FROM campaign_sends WHERE campaign_id = ? AND status = 'failed'
+     AND subscriber_id NOT IN (
+       SELECT subscriber_id FROM campaign_sends WHERE campaign_id = ? AND status = 'sent'
+     )`,
+    [campaignId, campaignId]
+  );
+  saveDatabase();
 }
 
 // ── Themes ──────────────────────────────────────────────────────────────────

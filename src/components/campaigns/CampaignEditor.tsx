@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ArrowLeft, Send, Eye, EyeOff, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle, BookOpen, BookmarkPlus, X, Check, AlignLeft, AlignCenter, AlignRight, ArrowDownUp, Link2, ImageIcon, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Send, FlaskConical, Users, Palette, Radio, FileText, AlertTriangle, BookOpen, BookmarkPlus, X, Check, AlignLeft, AlignCenter, AlignRight, ArrowDownUp, Link2, ImageIcon, MoreVertical, Lock, MailCheck } from 'lucide-react';
 import MDEditor, { commands } from '@uiw/react-md-editor';
 import { Marked } from 'marked';
-import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile, getThemes, getDefaultTheme, getSubscribersForList, getTemplates, createTemplate } from '../../db/database';
+import { getCampaign, createCampaign, updateCampaign, getLists, getAllTags, getSenderProfiles, senderProfileToSmtp, getDefaultSenderProfile, getThemes, getDefaultTheme, getSubscribersForList, getTemplates, createTemplate, getFailedSubscriberIds } from '../../db/database';
 import { useSettings } from '../../context/SettingsContext';
 import type { List, SenderProfile, EmailTheme, EmailTemplate } from '../../types';
 import { Button } from '../ui/Button';
 import { SendProgressModal } from './SendProgressModal';
 import { TestEmailModal } from './TestEmailModal';
+import { CampaignDeliveryTab } from './CampaignDeliveryTab';
 
 interface CampaignEditorProps {
   campaignId: number | null;
@@ -578,9 +579,9 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
   const [selectedProfileId, setSelectedProfileId] = useState<number | ''>('');
   const [themes, setThemes] = useState<EmailTheme[]>([]);
   const [selectedThemeId, setSelectedThemeId] = useState<number | ''>('');
-  const [showPreview, setShowPreview] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [retryIds, setRetryIds] = useState<Set<number> | undefined>(undefined);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [showLoadTemplateModal, setShowLoadTemplateModal] = useState(false);
@@ -592,7 +593,11 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
   const [showSpacerModal, setShowSpacerModal] = useState(false);
   const [linkInitText, setLinkInitText] = useState('');
   const [currentId, setCurrentId] = useState<number | null>(campaignId);
+  const [campaignStatus, setCampaignStatus] = useState<'draft' | 'sending' | 'sent'>('draft');
+  const [leftTab, setLeftTab] = useState<'content' | 'settings' | 'delivery'>('content');
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const isSent = campaignStatus === 'sent' || campaignStatus === 'sending';
 
   // Ref so auto-save callbacks always see the latest currentId without being in deps
   const currentIdRef = useRef<number | null>(campaignId);
@@ -653,6 +658,8 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
         setBody(campaign.body);
         setListId(campaign.list_id ?? '');
         setCurrentId(campaign.id);
+        setCampaignStatus(campaign.status);
+        if (campaign.status === 'sent') setLeftTab('delivery');
         if (campaign.sender_profile_id) setSelectedProfileId(campaign.sender_profile_id);
         if (campaign.theme_id) setSelectedThemeId(campaign.theme_id);
       }
@@ -686,12 +693,13 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
     const profileId = selectedProfileId ? Number(selectedProfileId) : null;
     const themeId = selectedThemeId ? Number(selectedThemeId) : null;
     if (currentId) {
-      updateCampaign(currentId, name.trim(), subject.trim(), body, Number(listId), 'draft', profileId, themeId);
+      updateCampaign(currentId, name.trim(), subject.trim(), body, Number(listId), 'sending', profileId, themeId);
     } else {
-      const id = createCampaign(name.trim(), subject.trim(), body, Number(listId), 'draft', profileId, themeId);
+      const id = createCampaign(name.trim(), subject.trim(), body, Number(listId), 'sending', profileId, themeId);
       setCurrentId(id);
       onSaved(id);
     }
+    setCampaignStatus('sending');
     if (settings.confirmBeforeSending) setShowConfirmModal(true);
     else setShowSendModal(true);
   }, [name, subject, body, listId, selectedProfileId, selectedThemeId, currentId, onSaved, settings.confirmBeforeSending]);
@@ -701,10 +709,21 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
       const profileId = selectedProfileId ? Number(selectedProfileId) : null;
       const themeId = selectedThemeId ? Number(selectedThemeId) : null;
       updateCampaign(currentId, name.trim(), subject.trim(), body, listId ? Number(listId) : null, 'sent', profileId, themeId);
+      setCampaignStatus('sent');
     }
+    setRetryIds(undefined);
   }, [currentId, name, subject, body, listId, selectedProfileId, selectedThemeId]);
 
+  const handleRetryFailed = useCallback(() => {
+    if (!currentId) return;
+    const failedIds = getFailedSubscriberIds(currentId);
+    if (failedIds.size === 0) return;
+    setRetryIds(failedIds);
+    setShowSendModal(true);
+  }, [currentId]);
+
   // Auto-save: create on first change, update on subsequent changes
+  // For sent campaigns, only name changes are saved (preserving 'sent' status)
   useEffect(() => {
     if (!name.trim()) return;
 
@@ -713,8 +732,8 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
       const themeId = selectedThemeId ? Number(selectedThemeId) : null;
       const lId = listId ? Number(listId) : null;
       if (currentIdRef.current !== null) {
-        updateCampaign(currentIdRef.current, name.trim(), subject.trim(), body, lId, 'draft', profileId, themeId);
-      } else {
+        updateCampaign(currentIdRef.current, name.trim(), subject.trim(), body, lId, isSent ? 'sent' : 'draft', profileId, themeId);
+      } else if (!isSent) {
         const id = createCampaign(name.trim(), subject.trim(), body, lId, 'draft', profileId, themeId);
         currentIdRef.current = id;
         setCurrentId(id);
@@ -727,7 +746,7 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
     saveNowRef.current = doSave;
     const timer = setTimeout(doSave, 1500);
     return () => clearTimeout(timer);
-  }, [name, subject, body, listId, selectedProfileId, selectedThemeId, onSaved]);
+  }, [name, subject, body, listId, selectedProfileId, selectedThemeId, onSaved, isSent]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -762,19 +781,26 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
-            placeholder="Campaign name..."
-            className={`text-base font-semibold bg-transparent border-none outline-none placeholder-gray-300 w-full text-gray-900 dark:text-white ${errors.name ? 'text-red-500' : ''}`}
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: '' })); }}
+              placeholder="Campaign name..."
+              className={`text-base font-semibold bg-transparent border-none outline-none placeholder-gray-300 w-full text-gray-900 dark:text-white ${errors.name ? 'text-red-500' : ''}`}
+            />
+            {isSent && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 flex-shrink-0">
+                <Lock size={10} />Sent
+              </span>
+            )}
+          </div>
           {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Saved</span>}
-          {/* Three-dot menu — mobile only */}
-          <div className="relative sm:hidden">
+          {/* Three-dot menu — mobile only, hidden for sent */}
+          <div className={`relative sm:hidden ${isSent ? 'hidden' : ''}`}>
             <button
               onClick={() => setShowEditorMenu((v) => !v)}
               className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -812,102 +838,117 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
         </div>
       </div>
 
-      {/* Toolbar — Row 2: desktop only */}
-      <div className="hidden sm:flex items-center gap-1.5 px-6 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        {/* Template actions */}
-        <button
-          onClick={() => setShowLoadTemplateModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <BookOpen size={14} />Load template
-        </button>
-        <button
-          onClick={() => setShowSaveTemplateModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <BookmarkPlus size={14} />Save as template
-        </button>
-
-        <div className="flex-1" />
-
-        {/* Preview toggle */}
-        <button
-          onClick={() => setShowPreview(!showPreview)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            showPreview
-              ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
-          }`}
-        >
-          {showPreview ? <EyeOff size={14} /> : <Eye size={14} />}
-          {showPreview ? 'Hide preview' : 'Preview'}
-        </button>
-
-        <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
-
-        {/* Test */}
-        <button
-          onClick={() => setShowTestModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <FlaskConical size={14} />Test
-        </button>
-
-        {/* Send */}
-        <Button variant="primary" size="sm" onClick={handleSend}>
-          <Send size={14} />Send
-        </Button>
-      </div>
-
-      {/* Mobile tabs: Write | Details | Preview */}
-      <div className="sm:hidden flex flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        {(['write', 'details', 'preview'] as const).map((tab) => (
+      {/* Tab bar + actions */}
+      <div className="flex flex-shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        {/* Tabs — full width on mobile, 50% on desktop */}
+        <div className="flex flex-1 sm:flex-none sm:w-1/2">
+          {([
+            { key: 'content' as const, label: 'Content', icon: <FileText size={14} /> },
+            { key: 'settings' as const, label: 'Settings', icon: <Palette size={14} /> },
+            ...(isSent && currentId ? [{ key: 'delivery' as const, label: 'Delivery', icon: <MailCheck size={14} /> }] : []),
+          ]).map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => {
+                setLeftTab(key);
+                setMobileTab(key === 'content' ? 'write' : 'details');
+              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                leftTab === key && mobileTab !== 'preview'
+                  ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border-transparent'
+              }`}
+            >
+              <span className="hidden sm:inline">{icon}</span>
+              {label}
+            </button>
+          ))}
+          {/* Mobile-only preview tab */}
           <button
-            key={tab}
-            onClick={() => setMobileTab(tab)}
-            className={`flex-1 py-2.5 text-sm font-medium capitalize transition-colors ${
-              mobileTab === tab
-                ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400 -mb-px'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            onClick={() => { setMobileTab('preview'); }}
+            className={`flex-1 sm:hidden flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              mobileTab === 'preview'
+                ? 'text-indigo-600 dark:text-indigo-400 border-indigo-600 dark:border-indigo-400'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 border-transparent'
             }`}
           >
-            {tab === 'write' ? 'Write' : tab === 'details' ? 'Details' : 'Preview & Send'}
+            Preview
           </button>
-        ))}
+        </div>
+
+        {/* Action buttons — desktop only, right half */}
+        {!isSent && (
+          <div className="hidden sm:flex items-center justify-end gap-1.5 flex-1 pr-4">
+            <button
+              onClick={() => setShowLoadTemplateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <BookOpen size={14} />Load template
+            </button>
+            <button
+              onClick={() => setShowSaveTemplateModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <BookmarkPlus size={14} />Save as template
+            </button>
+            <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1" />
+            <button
+              onClick={() => setShowTestModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <FlaskConical size={14} />Test
+            </button>
+            <Button variant="primary" size="sm" onClick={handleSend}>
+              <Send size={14} />Send
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Form + Editor */}
+      {/* Main content area */}
       <div className="flex-1 overflow-hidden flex">
-        {/* Editor column: meta fields + markdown editor */}
-        <div className={`flex-col overflow-hidden sm:flex ${showPreview ? 'sm:w-1/2' : 'sm:flex-1'} ${(mobileTab === 'write' || mobileTab === 'details') ? 'flex flex-1' : 'hidden'}`}>
-          {/* Meta fields — shown on mobile only in 'details' tab */}
-          <div className={`bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-y-auto sm:overflow-visible ${mobileTab === 'details' ? 'flex-1' : 'hidden sm:block'}`}>
+        {/* Left column */}
+        <div className={`flex-col overflow-hidden sm:flex sm:w-1/2 sm:border-r sm:border-gray-200 sm:dark:border-gray-700 ${mobileTab === 'preview' ? 'hidden' : 'flex flex-1'}`}>
 
-            {/* ── Mobile layout: full-screen form ── */}
-            <div className="sm:hidden px-5 py-6 space-y-6">
-              <div>
-                <label htmlFor="campaign-subject" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Subject line</label>
+          {/* ── Delivery tab ── */}
+          {leftTab === 'delivery' && currentId && (
+            <CampaignDeliveryTab
+              campaignId={currentId}
+              onRetryFailed={selectedSmtp && listId ? handleRetryFailed : undefined}
+            />
+          )}
+
+          {/* ── Settings tab ── */}
+          <div className={`${leftTab === 'settings' ? 'flex flex-col flex-1 overflow-y-auto bg-white dark:bg-gray-800' : 'hidden'}`}>
+            <fieldset disabled={isSent} className={`max-w-lg mx-auto w-full px-6 py-6 ${isSent ? 'opacity-60' : ''}`}>
+              {/* Subject */}
+              <div className="mb-6">
+                <label htmlFor="campaign-subject" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Subject line</label>
                 <input
                   id="campaign-subject" name="campaign_subject"
                   type="text"
                   value={subject}
                   onChange={(e) => { setSubject(e.target.value); setErrors((p) => ({ ...p, subject: '' })); }}
-                  placeholder="Email subject line…"
-                  className={`w-full px-4 py-3 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  placeholder="What's this email about?"
+                  className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
                 />
-                {errors.subject && <p className="text-sm text-red-500 mt-1.5">{errors.subject}</p>}
+                {errors.subject && <p className="text-xs text-red-500 mt-1">{errors.subject}</p>}
               </div>
 
-              <div>
-                <label htmlFor="campaign-from-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">From</label>
+              <div className="h-px bg-gray-100 dark:bg-gray-700 mb-6" />
+
+              {/* Sender */}
+              <div className="mb-6">
+                <label htmlFor="campaign-from" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Sender profile</label>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Who should this email come from?</p>
                 {senderProfiles.length === 0 ? (
-                  <p className="text-sm text-amber-500 dark:text-amber-400 py-2">No sender profiles — add one in Settings.</p>
+                  <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3.5 py-2.5 rounded-xl">No sender profiles yet — add one in Sender Profiles.</p>
                 ) : (
                   <select
-                    id="campaign-from-mobile"
+                    id="campaign-from"
                     value={selectedProfileId}
                     onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   >
                     <option value="">Select sender profile…</option>
                     {senderProfiles.map((p) => (
@@ -915,120 +956,63 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
                     ))}
                   </select>
                 )}
-                {errors.profile && <p className="text-sm text-red-500 mt-1.5">{errors.profile}</p>}
+                {errors.profile && <p className="text-xs text-red-500 mt-1">{errors.profile}</p>}
               </div>
 
-              <div>
-                <label htmlFor="campaign-list-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Send to list</label>
+              <div className="h-px bg-gray-100 dark:bg-gray-700 mb-6" />
+
+              {/* List */}
+              <div className="mb-6">
+                <label htmlFor="campaign-list" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Recipient list</label>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Which subscriber list should receive this campaign?</p>
                 <select
-                  id="campaign-list-mobile"
+                  id="campaign-list"
                   value={listId}
                   onChange={(e) => { setListId(e.target.value === '' ? '' : Number(e.target.value)); setErrors((p) => ({ ...p, list: '' })); setTagFilter(''); }}
-                  className={`w-full px-4 py-3 border rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
+                  className={`w-full px-3.5 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
                 >
                   <option value="">No list selected</option>
                   {lists.map((l) => (
                     <option key={l.id} value={l.id}>{l.name}</option>
                   ))}
                 </select>
-                {errors.list && <p className="text-sm text-red-500 mt-1.5">{errors.list}</p>}
+                {errors.list && <p className="text-xs text-red-500 mt-1">{errors.list}</p>}
               </div>
 
+              {/* Segment — conditional */}
               {listId !== '' && availableTags.length > 0 && (
-                <div>
-                  <label htmlFor="campaign-segment-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Segment</label>
-                  <select
-                    id="campaign-segment-mobile"
-                    value={tagFilter}
-                    onChange={(e) => setTagFilter(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">All contacts</option>
-                    {availableTags.map((tag) => (
-                      <option key={tag} value={tag}>{tag}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {themes.length > 0 && (
-                <div>
-                  <label htmlFor="campaign-theme-mobile" className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Theme</label>
-                  <select
-                    id="campaign-theme-mobile"
-                    value={selectedThemeId}
-                    onChange={(e) => setSelectedThemeId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">No theme (plain)</option>
-                    {themes.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}{t.is_default === 1 ? ' (default)' : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {/* ── Desktop layout: compact grid ── */}
-            <div className="hidden sm:block px-5 py-3 space-y-2.5">
-              <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="campaign-subject" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Subject</label>
-                  <input
-                    id="campaign-subject" name="campaign_subject"
-                    type="text"
-                    value={subject}
-                    onChange={(e) => { setSubject(e.target.value); setErrors((p) => ({ ...p, subject: '' })); }}
-                    placeholder="Email subject line…"
-                    className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600 ${errors.subject ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
-                  />
-                  {errors.subject && <p className="text-xs text-red-500">{errors.subject}</p>}
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="campaign-from" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">From</label>
-                  {senderProfiles.length === 0 ? (
-                    <p className="text-xs text-amber-500 dark:text-amber-400 py-1.5">No sender profiles — add one in Sender Profiles.</p>
-                  ) : (
+                <>
+                  <div className="h-px bg-gray-100 dark:bg-gray-700 mb-6" />
+                  <div className="mb-6">
+                    <label htmlFor="campaign-segment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Segment</label>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Optionally filter recipients by tag.</p>
                     <select
-                      id="campaign-from"
-                      value={selectedProfileId}
-                      onChange={(e) => setSelectedProfileId(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      id="campaign-segment"
+                      value={tagFilter}
+                      onChange={(e) => setTagFilter(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
-                      <option value="">Select sender profile…</option>
-                      {senderProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name}{p.sender_email ? ` — ${p.sender_email}` : ''}</option>
+                      <option value="">All contacts (no filter)</option>
+                      {availableTags.map((tag) => (
+                        <option key={tag} value={tag}>{tag}</option>
                       ))}
                     </select>
-                  )}
-                  {errors.profile && <p className="text-xs text-red-500">{errors.profile}</p>}
-                </div>
+                  </div>
+                </>
+              )}
 
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="campaign-list" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">List</label>
-                  <select
-                    id="campaign-list"
-                    value={listId}
-                    onChange={(e) => { setListId(e.target.value === '' ? '' : Number(e.target.value)); setErrors((p) => ({ ...p, list: '' })); setTagFilter(''); }}
-                    className={`w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white ${errors.list ? 'border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
-                  >
-                    <option value="">No list selected</option>
-                    {lists.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
-                  {errors.list && <p className="text-xs text-red-500">{errors.list}</p>}
-                </div>
-
-                {themes.length > 0 && (
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor="campaign-theme" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Theme</label>
+              {/* Theme — conditional */}
+              {themes.length > 0 && (
+                <>
+                  <div className="h-px bg-gray-100 dark:bg-gray-700 mb-6" />
+                  <div>
+                    <label htmlFor="campaign-theme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email theme</label>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Apply a visual wrapper around your email content.</p>
                     <select
                       id="campaign-theme"
                       value={selectedThemeId}
                       onChange={(e) => setSelectedThemeId(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      className="w-full px-3.5 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     >
                       <option value="">No theme (plain)</option>
                       {themes.map((t) => (
@@ -1036,83 +1020,72 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
                       ))}
                     </select>
                   </div>
-                )}
-              </div>
-
-              {listId !== '' && availableTags.length > 0 && (
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="campaign-segment" className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wide">Segment</label>
-                  <select
-                    id="campaign-segment"
-                    value={tagFilter}
-                    onChange={(e) => setTagFilter(e.target.value)}
-                    className="w-full px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  >
-                    <option value="">All contacts (no segment filter)</option>
-                    {availableTags.map((tag) => (
-                      <option key={tag} value={tag}>{tag}</option>
-                    ))}
-                  </select>
-                </div>
+                </>
               )}
+            </fieldset>
+          </div>{/* end settings tab */}
+
+          {/* ── Content tab ── */}
+          <div className={`${leftTab === 'content' ? 'flex flex-col flex-1 overflow-hidden' : 'hidden'}`}>
+            {/* Tokens hint — hidden for sent campaigns */}
+            {!isSent && (
+              <div className="px-4 py-1.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  Tokens: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{name}}'}</code>{', '}
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{first_name}}'}</code>{', '}
+                  <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{email}}'}</code>
+                </p>
+              </div>
+            )}
+
+            {/* MD Editor */}
+            <div className="flex-1 overflow-hidden flex flex-col relative" data-color-mode={settings.editorTheme}>
+              {isSent && <div className="absolute inset-0 z-10 cursor-not-allowed" />}
+              <MDEditor
+                value={body}
+                onChange={(val) => { if (!isSent) setBody(val ?? ''); }}
+                height="100%"
+                preview="edit"
+                commands={isSent ? [] : [
+                  commands.bold, commands.italic, commands.strikethrough,
+                  commands.divider,
+                  commands.title1, commands.title2, commands.title3,
+                  commands.divider,
+                  customLinkCmd, commands.quote, commands.code, commands.codeBlock, customImageCmd,
+                  commands.divider,
+                  commands.unorderedListCommand, commands.orderedListCommand, commands.checkedListCommand,
+                  commands.divider,
+                  commands.hr,
+                  commands.divider,
+                  alignLeftCmd, alignCenterCmd, alignRightCmd,
+                  commands.divider,
+                  customSpacerCmd,
+                  commands.divider,
+                  tokenNameCmd, tokenFirstNameCmd, tokenEmailCmd,
+                ]}
+                extraCommands={[]}
+                style={{ height: '100%', borderRadius: 0 }}
+                visibleDragbar={false}
+              />
             </div>
+          </div>{/* end content tab */}
 
+        </div>{/* end left column */}
+
+        {/* Right column: Email Preview — always visible on desktop, mobile only on preview tab */}
+        <div className={`flex flex-col bg-gray-100 dark:bg-gray-900 ${mobileTab === 'preview' ? 'flex-1 sm:flex sm:w-1/2' : 'hidden sm:flex sm:w-1/2'}`}>
+          <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <p className="text-xs text-gray-500 dark:text-gray-400"><strong>From:</strong> {selectedProfile?.sender_name || '—'} &lt;{selectedProfile?.sender_email || 'no profile selected'}&gt;</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"><strong>Subject:</strong> {subject || '(no subject)'}</p>
           </div>
-
-          {/* Tokens hint — shown above the editor */}
-          <div className={`px-4 py-1.5 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 sm:block ${mobileTab === 'write' ? '' : 'hidden'}`}>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Tokens: <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{name}}'}</code>{', '}
-              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{first_name}}'}</code>{', '}
-              <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">{'{{email}}'}</code>
-            </p>
-          </div>
-
-          {/* MD Editor — shown on mobile only in 'write' tab */}
-          <div className={`flex-1 overflow-hidden sm:flex sm:flex-col ${mobileTab === 'write' ? 'flex flex-col' : 'hidden'}`} data-color-mode={settings.editorTheme}>
-            <MDEditor
-              value={body}
-              onChange={(val) => setBody(val ?? '')}
-              height="100%"
-              preview="edit"
-              commands={[
-                commands.bold, commands.italic, commands.strikethrough,
-                commands.divider,
-                commands.title1, commands.title2, commands.title3,
-                commands.divider,
-                customLinkCmd, commands.quote, commands.code, commands.codeBlock, customImageCmd,
-                commands.divider,
-                commands.unorderedListCommand, commands.orderedListCommand, commands.checkedListCommand,
-                commands.divider,
-                commands.hr,
-                commands.divider,
-                alignLeftCmd, alignCenterCmd, alignRightCmd,
-                commands.divider,
-                customSpacerCmd,
-                commands.divider,
-                tokenNameCmd, tokenFirstNameCmd, tokenEmailCmd,
-              ]}
-              extraCommands={[]}
-              style={{ height: '100%', borderRadius: 0 }}
-              visibleDragbar={false}
-            />
-          </div>
-        </div>
-
-        {/* Email Preview — shown on mobile when 'preview' tab, on desktop when showPreview */}
-        {(showPreview || mobileTab === 'preview') && (
-          <div className={`border-gray-200 dark:border-gray-700 flex flex-col bg-gray-100 dark:bg-gray-900 ${mobileTab === 'preview' ? 'flex-1 sm:hidden' : ''} ${showPreview ? 'hidden sm:flex sm:w-1/2 sm:border-l' : ''}`}>
-            <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <p className="text-xs text-gray-500 dark:text-gray-400"><strong>From:</strong> {selectedProfile?.sender_name || '—'} &lt;{selectedProfile?.sender_email || 'no profile selected'}&gt;</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5"><strong>Subject:</strong> {subject || '(no subject)'}</p>
-            </div>
-            <iframe
-              srcDoc={buildEmailHtml(subject || '(no subject)', body, selectedProfile?.sender_name ?? '', true, selectedTheme?.template_html)}
-              className="flex-1 w-full border-none min-h-0"
-              sandbox="allow-same-origin"
-              title="Email preview"
-            />
-            {/* Mobile: Preview & Send button */}
+          <iframe
+            srcDoc={buildEmailHtml(subject || '(no subject)', body, selectedProfile?.sender_name ?? '', true, selectedTheme?.template_html)}
+            className="flex-1 w-full border-none min-h-0"
+            sandbox="allow-same-origin"
+            title="Email preview"
+          />
+          {/* Mobile: Preview & Send button */}
+          {!isSent && (
             <div className="sm:hidden flex-shrink-0 p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleSend}
@@ -1122,8 +1095,8 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
                 Send
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {showConfirmModal && listId && selectedProfile && (
@@ -1149,8 +1122,9 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
           smtp={selectedSmtp}
           rateLimit={selectedProfile?.rate_limit_ms ?? 0}
           onAllSent={handleSendComplete}
-          onClose={() => { setShowSendModal(false); onBack(); }}
+          onClose={() => { setShowSendModal(false); setRetryIds(undefined); if (!isSent) onBack(); }}
           tagFilter={tagFilter || undefined}
+          retrySubscriberIds={retryIds}
         />
       )}
 

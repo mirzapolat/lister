@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS templates (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE INDEX IF NOT EXISTS idx_campaign_sends_campaign ON campaign_sends(campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_campaign_sends_subscriber ON campaign_sends(subscriber_id);
+CREATE INDEX IF NOT EXISTS idx_list_subscribers_list ON list_subscribers(list_id);
+CREATE INDEX IF NOT EXISTS idx_list_subscribers_subscriber ON list_subscribers(subscriber_id);
+CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_subscriber_tags_subscriber ON subscriber_tags(subscriber_id);
+CREATE INDEX IF NOT EXISTS idx_subscriber_tags_tag ON subscriber_tags(tag);
+
 PRAGMA foreign_keys = ON;
 `;
 

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, XCircle, X, AlertTriangle } from 'lucide-react';
-import { getSubscribersForList, getSubscribersWithTag, addBounce, recordCampaignSend, saveDatabase } from '../../db/database';
+import { getSubscribersForList, getSubscribersWithTag, getAlreadySentSubscriberIds, addBounce, recordCampaignSend, saveDatabase } from '../../db/database';
 import type { Subscriber, SmtpSettings } from '../../types';
 
 interface Recipient {
   contact: Subscriber;
-  status: 'pending' | 'sending' | 'sent' | 'failed';
+  status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped';
   error?: string;
   bounced?: boolean;
 }
@@ -21,6 +21,7 @@ interface SendProgressModalProps {
   onClose: () => void;
   onAllSent: () => void;
   tagFilter?: string;
+  retrySubscriberIds?: Set<number>;
 }
 
 // Text patterns used as fallback when no SMTP response code is available
@@ -86,29 +87,49 @@ async function sendOne(
   }
 }
 
-export function SendProgressModal({ campaignId, listId, subject, html, text, smtp, rateLimit, onClose, onAllSent, tagFilter }: SendProgressModalProps) {
-  const contacts = tagFilter
+export function SendProgressModal({ campaignId, listId, subject, html, text, smtp, rateLimit, onClose, onAllSent, tagFilter, retrySubscriberIds }: SendProgressModalProps) {
+  const allContacts = tagFilter
     ? getSubscribersWithTag(listId, tagFilter)
     : getSubscribersForList(listId);
+
+  // When retrying failed, only include those specific subscribers
+  const contacts = retrySubscriberIds
+    ? allContacts.filter((c) => retrySubscriberIds.has(c.id))
+    : allContacts;
+
+  // Determine which subscribers already received this campaign successfully
+  const alreadySent = campaignId ? getAlreadySentSubscriberIds(campaignId) : new Set<number>();
+
   const [recipients, setRecipients] = useState<Recipient[]>(
-    contacts.map((c) => ({ contact: c, status: 'pending' }))
+    contacts.map((c) => ({
+      contact: c,
+      // For retry mode, all contacts are pending (failed records were cleared before retry)
+      status: retrySubscriberIds ? 'pending' : (alreadySent.has(c.id) ? 'skipped' : 'pending'),
+    }))
   );
   const [done, setDone] = useState(false);
   const cancelRef = useRef(false);
 
   const sentCount = recipients.filter((r) => r.status === 'sent').length;
   const failedCount = recipients.filter((r) => r.status === 'failed').length;
+  const skippedCount = recipients.filter((r) => r.status === 'skipped').length;
   const bouncedCount = recipients.filter((r) => r.status === 'failed' && r.bounced).length;
-  const progress = recipients.length > 0 ? ((sentCount + failedCount) / recipients.length) * 100 : 0;
+  const totalToSend = recipients.length - skippedCount;
+  const progress = totalToSend > 0 ? ((sentCount + failedCount) / totalToSend) * 100 : 100;
 
   useEffect(() => {
-    if (contacts.length === 0) return;
+    const toSend = contacts.filter((c) => !alreadySent.has(c.id));
+    if (toSend.length === 0) {
+      setDone(true);
+      onAllSent();
+      return;
+    }
     cancelRef.current = false;
 
     const run = async () => {
-      for (let i = 0; i < contacts.length; i++) {
+      for (let i = 0; i < toSend.length; i++) {
         if (cancelRef.current) break;
-        const contact = contacts[i];
+        const contact = toSend[i];
 
         setRecipients((prev) =>
           prev.map((r) => r.contact.id === contact.id ? { ...r, status: 'sending' } : r)
@@ -117,6 +138,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
         try {
           await sendOne(smtp, contact, subject, html, text);
           recordCampaignSend(campaignId, contact.id, 'sent');
+          saveDatabase();
           setRecipients((prev) =>
             prev.map((r) => r.contact.id === contact.id ? { ...r, status: 'sent' } : r)
           );
@@ -126,6 +148,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
           const bounced = isHardBounce(err.message, err.responseCode);
           if (bounced) addBounce(contact.email, errorMsg);
           recordCampaignSend(campaignId, contact.id, 'failed', errorMsg);
+          saveDatabase();
           setRecipients((prev) =>
             prev.map((r) =>
               r.contact.id === contact.id
@@ -136,12 +159,11 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
         }
 
         // Rate limiting between sends
-        if (i < contacts.length - 1 && rateLimit > 0) {
+        if (i < toSend.length - 1 && rateLimit > 0) {
           await new Promise((resolve) => setTimeout(resolve, rateLimit));
         }
       }
 
-      saveDatabase();
       setDone(true);
       if (!cancelRef.current) onAllSent();
     };
@@ -157,7 +179,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-              {done ? 'Send complete' : 'Sending campaign…'}
+              {done ? 'Send complete' : retrySubscriberIds ? 'Retrying failed…' : 'Sending campaign…'}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 truncate max-w-xs">{subject}</p>
             {tagFilter && (
@@ -175,7 +197,7 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
             {/* Progress bar */}
             <div className="px-6 pt-4 flex-shrink-0">
               <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-                <span>{sentCount} sent · {failedCount} failed · {recipients.length - sentCount - failedCount} remaining</span>
+                <span>{sentCount} sent · {failedCount} failed{skippedCount > 0 ? ` · ${skippedCount} skipped` : ''} · {totalToSend - sentCount - failedCount} remaining</span>
                 <span>{Math.round(progress)}%</span>
               </div>
               <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -227,6 +249,11 @@ export function SendProgressModal({ campaignId, listId, subject, html, text, smt
                     <div className="flex items-center gap-1.5 text-sm text-red-500">
                       <XCircle size={15} />
                       <span><strong>{failedCount}</strong> failed{bouncedCount > 0 ? ` (${bouncedCount} bounced)` : ''}</span>
+                    </div>
+                  )}
+                  {skippedCount > 0 && (
+                    <div className="flex items-center gap-1.5 text-sm text-gray-400">
+                      <span><strong>{skippedCount}</strong> already sent</span>
                     </div>
                   )}
                   <button

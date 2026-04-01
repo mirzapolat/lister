@@ -22,7 +22,7 @@ export interface Campaign {
   list_id: number | null;
   sender_profile_id: number | null;
   theme_id: number | null;
-  status: 'draft' | 'sent';
+  status: 'draft' | 'sending' | 'sent';
   created_at: string;
   sent_at: string | null;
   list_name?: string;
@@ -107,6 +107,8 @@ export interface CampaignSend {
   campaign_name: string | null;
   campaign_subject: string | null;
   subscriber_id: number;
+  subscriber_email?: string;
+  subscriber_name?: string;
   sent_at: string;
   status: 'sent' | 'failed';
   error: string;
