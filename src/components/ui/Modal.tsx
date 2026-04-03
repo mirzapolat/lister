@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { isElectron, isMac } from '../../lib/platform';
 
 interface ModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const sizeClasses = {
 export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
+  const electronMac = isElectron() && isMac();
 
   useEffect(() => {
     let raf1 = 0, raf2 = 0;
@@ -61,11 +63,15 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
           <div className="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
         </div>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+        <div
+          className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-gray-700 flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+        >
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
             <X size={18} />
           </button>
@@ -79,12 +85,17 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         <div className="relative flex min-h-full items-center justify-center p-4">
           <div
             className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full ${sizeClasses[size]} transition-all duration-200 ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+            style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700"
+              style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+            >
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h2>
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
               >
                 <X size={18} />
               </button>

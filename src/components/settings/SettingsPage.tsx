@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star, Search, X, ExternalLink, KeyRound, ChevronUp, ChevronDown, Type, AlertTriangle, Download, FileJson, FileText, ShieldCheck, Fingerprint, Eye, EyeOff, ShieldOff } from 'lucide-react';
-import { useSettings } from '../../context/SettingsContext';
+import { useState, useEffect, useMemo, FormEvent, type CSSProperties } from 'react';
+import { Server, User, Lock, Mail, CheckCircle, Zap, Wifi, Plus, Pencil, Trash2, Star, Search, X, ExternalLink, KeyRound, ChevronUp, ChevronDown, AlertTriangle, Download, FileJson, FileText, ShieldCheck, Fingerprint, Eye, EyeOff, ShieldOff } from 'lucide-react';
 import { exportAllData, exportSubscribersCSV, wipeAllCampaigns, wipeAllSubscribers, resetAllData } from '../../db/database';
 import {
   getSenderProfiles, createSenderProfile, updateSenderProfile, deleteSenderProfile,
@@ -11,6 +10,7 @@ import type { SenderProfile } from '../../types';
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { createPasskeyCredential, isPasskeySupported } from '../../db/crypto';
+import { isElectron, isMac } from '../../lib/platform';
 
 // ── SMTP presets ──────────────────────────────────────────────────────────────
 
@@ -515,6 +515,7 @@ export function SenderProfilesPage() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [sortKey, setSortKey] = useState<'name' | 'sender_email' | 'smtp_host' | 'is_default'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const electronMac = isElectron() && isMac();
 
   const refresh = () => setProfiles(getSenderProfiles());
   useEffect(() => { refresh(); }, []);
@@ -573,9 +574,15 @@ export function SenderProfilesPage() {
   return (
     <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-1">
+      <div
+        className={`flex items-start justify-between mb-1 gap-4 ${electronMac ? 'md:min-h-[52px] md:pt-4' : ''}`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as CSSProperties : undefined}
+      >
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Sender Profiles</h2>
-        <div className="relative flex-shrink-0">
+        <div
+          className="relative flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as CSSProperties : undefined}
+        >
           <button
             onClick={() => setProviderDropdown((v) => !v)}
             className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"
@@ -1092,134 +1099,6 @@ function SecuritySection() {
   );
 }
 
-// ── Appearance Section ────────────────────────────────────────────────────────
-
-import React from 'react';
-import { Sun, Moon, Monitor } from 'lucide-react';
-import type { AppSettings } from '../../context/SettingsContext';
-
-function AppearanceSection() {
-  const { settings, updateSettings } = useSettings();
-
-  const schemes: { value: AppSettings['colorScheme']; label: string; icon: React.ReactNode }[] = [
-    { value: 'light', label: 'Light', icon: <Sun size={15} /> },
-    { value: 'dark', label: 'Dark', icon: <Moon size={15} /> },
-    { value: 'auto', label: 'System', icon: <Monitor size={15} /> },
-  ];
-
-  return (
-    <div className="max-w-lg">
-      <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Appearance</h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Choose how Lister looks. System follows your OS or browser preference.</p>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Color Scheme</label>
-        <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {schemes.map(({ value, label, icon }) => (
-            <button
-              key={value}
-              onClick={() => updateSettings({ colorScheme: value })}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
-                settings.colorScheme === value
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-              }`}
-            >
-              {icon}
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Editor Section ────────────────────────────────────────────────────────────
-
-function EditorSection() {
-  const { settings, updateSettings } = useSettings();
-  const { editorFontSize, editorTheme, confirmBeforeSending } = settings;
-
-  const themes: { value: typeof editorTheme; label: string; description: string }[] = [
-    { value: 'light', label: 'GitHub Light', description: 'Light background, classic GitHub colors' },
-    { value: 'dark',  label: 'GitHub Dark',  description: 'Dark background, GitHub dark colors' },
-  ];
-
-  return (
-    <div className="max-w-lg space-y-8">
-      <div>
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">Editor</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Customize the writing experience. These settings only affect the editor display, not the generated email.</p>
-      </div>
-
-      {/* Font size */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Font Size</label>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Controls the text size in all markdown editors.</p>
-        <div className="flex items-center gap-4">
-          <input
-            type="range" min={11} max={24} value={editorFontSize}
-            onChange={(e) => updateSettings({ editorFontSize: Number(e.target.value) })}
-            className="flex-1 accent-indigo-600"
-          />
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => updateSettings({ editorFontSize: Math.max(11, editorFontSize - 1) })}
-              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium transition-colors">−</button>
-            <span className="w-10 text-center text-sm font-semibold text-gray-800 dark:text-gray-200 tabular-nums">{editorFontSize}px</span>
-            <button onClick={() => updateSettings({ editorFontSize: Math.min(24, editorFontSize + 1) })}
-              className="w-7 h-7 flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-medium transition-colors">+</button>
-          </div>
-        </div>
-        <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
-          Preview: <span style={{ fontSize: editorFontSize }}>The quick brown fox jumps over the lazy dog.</span>
-        </p>
-      </div>
-
-      {/* Syntax theme */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Syntax Highlight Theme</label>
-        <div className="space-y-2">
-          {themes.map(({ value, label, description }) => (
-            <button
-              key={value}
-              onClick={() => updateSettings({ editorTheme: value })}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
-                editorTheme === value
-                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-              }`}
-            >
-              <div className={`w-3 h-3 rounded-full flex-shrink-0 border-2 ${editorTheme === value ? 'border-indigo-600 bg-indigo-600' : 'border-gray-300 dark:border-gray-600'}`} />
-              <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{label}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Confirm before sending */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Sending</label>
-        <button
-          onClick={() => updateSettings({ confirmBeforeSending: !confirmBeforeSending })}
-          className="flex items-center gap-3 w-full text-left"
-        >
-          <div className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${confirmBeforeSending ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${confirmBeforeSending ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Show confirmation before sending</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Review recipients and settings before a campaign is sent.</p>
-          </div>
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // ── Data Section ──────────────────────────────────────────────────────────────
 
 function DataSection() {
@@ -1325,17 +1204,19 @@ function DataSection() {
 
 // ── Settings Page (top-level) ─────────────────────────────────────────────────
 
-type SettingsSection = 'appearance' | 'editor' | 'data' | 'security';
+type SettingsSection = 'data' | 'security';
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ReactNode }[] = [
-  { id: 'appearance', label: 'Appearance', icon: <Sun size={15} /> },
-  { id: 'editor',     label: 'Editor',     icon: <Type size={15} /> },
   { id: 'data',       label: 'Data',       icon: <Download size={15} /> },
   { id: 'security',   label: 'Security',   icon: <Lock size={15} /> },
 ];
 
-export function SettingsPage() {
-  const [section, setSection] = useState<SettingsSection>('appearance');
+interface SettingsPageProps {
+  onOpenPreferences: () => void;
+}
+
+export function SettingsPage({ onOpenPreferences }: SettingsPageProps) {
+  const [section, setSection] = useState<SettingsSection>('data');
 
   return (
     <div className="flex flex-col sm:flex-row h-full">
@@ -1362,8 +1243,19 @@ export function SettingsPage() {
 
       {/* Right content */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-5 sm:py-6">
-        {section === 'appearance' && <AppearanceSection />}
-        {section === 'editor' && <EditorSection />}
+        <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/80 px-4 py-4 dark:border-indigo-900/40 dark:bg-indigo-900/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">App Preferences</h2>
+              <p className="mt-1 text-sm text-indigo-700 dark:text-indigo-300">
+                Appearance and editor preferences now apply across the whole app instead of individual workspaces.
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={onOpenPreferences}>
+              Open Preferences
+            </Button>
+          </div>
+        </div>
         {section === 'data' && <DataSection />}
         {section === 'security' && <SecuritySection />}
       </div>

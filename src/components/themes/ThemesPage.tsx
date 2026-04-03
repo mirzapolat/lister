@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { Check, Copy, Trash2, Plus, Star, Search, X, Download, Upload, MoreVertical } from 'lucide-react';
 import { Marked } from 'marked';
 import { getThemes, createTheme, updateTheme, deleteTheme, setDefaultTheme } from '../../db/database';
 import type { EmailTheme } from '../../types';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { isElectron, isMac } from '../../lib/platform';
 
 const marked = new Marked({ gfm: true, breaks: true });
 
@@ -158,6 +159,7 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
   const [mobileTab, setMobileTab] = useState<'code' | 'preview'>('code');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const electronMac = isElectron() && isMac();
 
   const isDefault = theme?.is_default === 1;
 
@@ -204,11 +206,16 @@ function ThemeEditorModal({ theme, onClose, onSaved, onSetDefault, onDelete, ini
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {theme ? 'Edit Theme' : 'New Theme'}
-        </h2>
-        <div className="flex items-center gap-2">
+      <div
+        className={`flex items-center justify-end px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 ${
+          electronMac ? 'md:min-h-[52px] md:pt-4' : ''
+        }`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as CSSProperties : undefined}
+      >
+        <div
+          className="flex items-center gap-2"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as CSSProperties : undefined}
+        >
           {/* Desktop: full action buttons */}
           {theme && (
             <button
@@ -468,6 +475,7 @@ export function ThemesPage() {
   const [editorTheme, setEditorTheme] = useState<EmailTheme | null | undefined>(undefined); // undefined = closed, null = new
   const [deleteTarget, setDeleteTarget] = useState<EmailTheme | null>(null);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const electronMac = isElectron() && isMac();
 
   const load = () => setThemes(getThemes());
   useEffect(() => { load(); }, []);
@@ -559,9 +567,15 @@ export function ThemesPage() {
   return (
     <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-1">
+      <div
+        className={`flex items-start justify-between mb-1 gap-4 ${electronMac ? 'md:min-h-[52px] md:pt-4' : ''}`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as CSSProperties : undefined}
+      >
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Themes</h1>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div
+          className="flex items-center gap-1.5 flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as CSSProperties : undefined}
+        >
           {/* Three-dot: import */}
           <div className="relative">
             <button

@@ -6,6 +6,7 @@ import { Button } from '../ui/Button';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { useHotkey } from '../../hooks/useHotkey';
+import { isElectron, isMac } from '../../lib/platform';
 
 type SortKey = 'name' | 'subject' | 'created_at';
 
@@ -28,6 +29,7 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
   const [body, setBody] = useState(template?.body ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mobileTab, setMobileTab] = useState<'details' | 'body'>('details');
+  const electronMac = isElectron() && isMac();
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -51,11 +53,16 @@ function TemplateEditor({ template, onClose, onSaved }: EditorProps) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900" onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-          {template ? 'Edit Template' : 'New Template'}
-        </h2>
-        <div className="flex items-center gap-2">
+      <div
+        className={`flex items-center justify-end px-4 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 ${
+          electronMac ? 'md:min-h-[52px] md:pt-4' : ''
+        }`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+      >
+        <div
+          className="flex items-center gap-2"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+        >
           <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
           <Button variant="primary" size="sm" onClick={handleSave}>
             Save<span className="hidden sm:inline"> Template</span>
@@ -172,6 +179,7 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<EmailTemplate | null>(null);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const electronMac = isElectron() && isMac();
 
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -342,9 +350,15 @@ export function TemplatesPage({ onUseTemplate }: TemplatesPageProps) {
       <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-1">
+      <div
+        className={`flex items-start justify-between mb-1 gap-4 ${electronMac ? 'md:min-h-[52px] md:pt-4' : ''}`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+      >
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Templates</h1>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div
+          className="flex items-center gap-1.5 flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+        >
           {/* Three-dot: import / export */}
           <div className="relative">
             <button

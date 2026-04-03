@@ -6,6 +6,7 @@ import {
   Save, HardDrive, FolderOpen, RefreshCw,
 } from 'lucide-react';
 import { createSenderProfile, createList, hasFileSystemApi } from '../db/database';
+import { isElectron, isMac } from '../lib/platform';
 
 // ── Animations ────────────────────────────────────────────────────────────────
 
@@ -674,6 +675,7 @@ interface OnboardingWizardProps {
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const isChromium = hasFileSystemApi();
   const browserName = isChromium ? '' : detectBrowser();
+  const electronMac = isElectron() && isMac();
 
   // Steps: -1=browser-warn (non-chromium only), 0=welcome, 1=sender, 2=list, 3=done, 4=save-tutorial (non-chromium only)
   const [step, setStep] = useState(isChromium ? 0 : -1);
@@ -774,7 +776,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       <style>{KEYFRAMES}</style>
 
       {/* Top bar */}
-      <div className="flex-shrink-0 flex items-center justify-between px-8 py-5 border-b border-gray-100 dark:border-gray-800">
+      <div
+        className={`flex-shrink-0 flex items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 ${
+          electronMac ? 'min-h-[72px] pl-[92px] pr-8 pt-4 pb-4' : 'px-8 py-5'
+        }`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+      >
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
             <Database size={14} className="text-white" />

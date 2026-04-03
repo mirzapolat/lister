@@ -21,10 +21,7 @@ function load(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
-    // Migrate from old per-key theme storage
-    const oldTheme = localStorage.getItem('lister-theme');
-    if (oldTheme === 'dark') return { ...DEFAULTS, colorScheme: 'dark' };
-    if (oldTheme === 'light') return { ...DEFAULTS, colorScheme: 'light' };
+    localStorage.removeItem('lister-theme');
   } catch {}
   return DEFAULTS;
 }

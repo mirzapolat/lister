@@ -9,6 +9,7 @@ import { Button } from '../ui/Button';
 import { SendProgressModal } from './SendProgressModal';
 import { TestEmailModal } from './TestEmailModal';
 import { CampaignDeliveryTab } from './CampaignDeliveryTab';
+import { isElectron, isMac } from '../../lib/platform';
 
 interface CampaignEditorProps {
   campaignId: number | null;
@@ -768,19 +769,29 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
   const selectedSmtp = selectedProfile ? senderProfileToSmtp(selectedProfile) : null;
   const selectedTheme = themes.find((t) => t.id === selectedThemeId) ?? null;
   const htmlForSend = buildEmailHtml(subject, body, selectedProfile?.sender_name ?? '', false, selectedTheme?.template_html);
+  const electronMac = isElectron() && isMac();
 
 
   return (
     <div className="flex flex-col h-full relative">
       {/* Toolbar — Row 1: back + name + three-dot */}
-      <div className="flex items-center px-3 sm:px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 gap-2">
+      <div
+        className={`flex items-center gap-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0 px-3 sm:px-6 py-3 ${
+          electronMac ? 'md:min-h-[52px] md:pt-4' : ''
+        }`}
+        style={electronMac ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+      >
         <button
           onClick={onBack}
           className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+        >
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -797,7 +808,10 @@ export function CampaignEditor({ campaignId, templateToLoad, onTemplateLoaded, o
           </div>
           {errors.name && <p className="text-xs text-red-500">{errors.name}</p>}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div
+          className="flex items-center gap-1 flex-shrink-0"
+          style={electronMac ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+        >
           {saved && <span className="text-xs text-green-600 dark:text-green-400 font-medium">Saved</span>}
           {/* Three-dot menu — mobile only, hidden for sent */}
           <div className={`relative sm:hidden ${isSent ? 'hidden' : ''}`}>

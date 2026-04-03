@@ -13,6 +13,42 @@ let db: Database | null = null;
 let fileHandle: FileSystemFileHandle | null = null;
 let fallbackFileName = 'lister.sqlite';
 
+// ── Electron workspace tracking ──────────────────────────────────────────────
+let activeWorkspaceId: string | null = null;
+let electronSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function setActiveWorkspaceId(id: string | null): void { activeWorkspaceId = id; }
+export function getActiveWorkspaceId(): string | null { return activeWorkspaceId; }
+
+export type SaveStateStatus = 'saved' | 'saving' | 'error';
+
+export interface SaveState {
+  message?: string;
+  status: SaveStateStatus;
+  timestamp: number;
+}
+
+const SAVE_STATE_EVENT = 'lister:save-state';
+let currentSaveState: SaveState = { status: 'saved', timestamp: Date.now() };
+
+function setSaveState(status: SaveStateStatus, message?: string): void {
+  currentSaveState = { status, message, timestamp: Date.now() };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<SaveState>(SAVE_STATE_EVENT, { detail: currentSaveState }));
+  }
+}
+
+export function getCurrentSaveState(): SaveState {
+  return currentSaveState;
+}
+
+export function subscribeToSaveState(listener: (state: SaveState) => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handler = (event: Event) => listener((event as CustomEvent<SaveState>).detail);
+  window.addEventListener(SAVE_STATE_EVENT, handler);
+  return () => window.removeEventListener(SAVE_STATE_EVENT, handler);
+}
+
 // ── In-memory encryption state ────────────────────────────────────────────────
 let encryptionKey: CryptoKey | null = null;
 // For password method: the PBKDF2 salt stored in the file header (reused on save).
@@ -75,14 +111,17 @@ export async function clearStoredFileHandle(): Promise<void> {
 }
 
 export function closeDatabase(): void {
+  if (electronSaveTimer) clearTimeout(electronSaveTimer);
   if (db) { db.close(); db = null; }
   fileHandle = null;
+  activeWorkspaceId = null;
   encryptionKey = null;
   encryptionSalt = null;
   encryptionMethod = null;
   pendingFileBytes = null;
   pendingHandle = null;
   pendingFileName = null;
+  setSaveState('saved');
 }
 
 export function hasFileSystemApi(): boolean {
@@ -108,10 +147,61 @@ export async function createNewDatabase(): Promise<Database> {
   db.run(MIGRATION_SQL);
   seedBuiltinThemes();
   seedBuiltinTemplates();
+  setSaveState('saved');
   return db;
 }
 
-// Private helper: run schema/migration/seed on an already-loaded db instance.
+// ── Electron helpers ─────────────────────────────────────────────────────────
+
+/** Open a database from raw bytes received via IPC (Electron mode). */
+export async function openDatabaseFromBytes(
+  bytes: Uint8Array,
+): Promise<OpenResult> {
+  const sql = await initSqlJs_();
+  const raw = bytes.length > 0 ? bytes : undefined;
+
+  if (raw && isEncryptedFile(raw)) {
+    const header = readEncryptionHeader(raw);
+    pendingFileBytes = raw;
+    pendingHandle = null;
+    pendingFileName = 'workspace';
+    return { status: 'needs-auth', method: header.method, salt: header.salt, fileName: 'workspace' };
+  }
+
+  db = raw ? new sql.Database(raw) : new sql.Database();
+  if (!raw) {
+    db.run(SCHEMA_SQL);
+    db.run(MIGRATION_SQL);
+    seedBuiltinThemes();
+    seedBuiltinTemplates();
+  } else {
+    await initializeLoadedDb();
+  }
+  setSaveState('saved');
+  return { status: 'ok', db, fileName: 'workspace' };
+}
+
+/** Export the current database as a Uint8Array for saving via IPC. */
+export function exportDatabaseBytes(): Uint8Array {
+  if (!db) throw new Error('No database loaded');
+  return db.export();
+}
+
+/** Save the current database to disk via the Electron IPC bridge. */
+export async function saveDatabaseElectron(workspaceId: string): Promise<void> {
+  if (!db) return;
+  const data = db.export();
+  let bytes: Uint8Array;
+  if (encryptionKey && encryptionMethod) {
+    const encrypted = await encryptBytes(data, encryptionKey, encryptionMethod, encryptionSalt ?? undefined);
+    bytes = new Uint8Array(encrypted instanceof ArrayBuffer ? encrypted : encrypted);
+  } else {
+    bytes = data;
+  }
+  await window.electronAPI!.saveWorkspace(workspaceId, bytes);
+}
+
+// ── Private helper: run schema/migration/seed on an already-loaded db instance.
 async function initializeLoadedDb(): Promise<void> {
   if (!db) throw new Error('No database loaded');
   db.run("PRAGMA foreign_keys = ON;");
@@ -153,6 +243,7 @@ export async function openDatabaseFromFile(handle: FileSystemFileHandle): Promis
   fileHandle = handle;
   await initializeLoadedDb();
   await storeFileHandleInIDB(handle);
+  setSaveState('saved');
   return { status: 'ok', db, fileName: handle.name };
 }
 
@@ -183,12 +274,32 @@ export async function completePendingOpenWithKey(
   if (fileHandle) await storeFileHandleInIDB(fileHandle);
   else fallbackFileName = fileName;
 
+  setSaveState('saved');
   return { db, fileName };
 }
 
 export async function saveDatabase(): Promise<void> {
   if (!db) return;
+
+  // Electron mode: debounced IPC save
+  if (activeWorkspaceId && window.electronAPI) {
+    setSaveState('saving');
+    if (electronSaveTimer) clearTimeout(electronSaveTimer);
+    electronSaveTimer = setTimeout(() => {
+      if (db && activeWorkspaceId) {
+        saveDatabaseElectron(activeWorkspaceId)
+          .then(() => setSaveState('saved'))
+          .catch((error) => {
+            console.error(error);
+            setSaveState('error', error instanceof Error ? error.message : String(error));
+          });
+      }
+    }, 1000);
+    return;
+  }
+
   if (!fileHandle) return; // fallback mode: skip auto-save, user downloads manually
+  setSaveState('saving');
   const data = db.export();
   let bytes: Uint8Array<ArrayBuffer> | ArrayBuffer;
   if (encryptionKey && encryptionMethod) {
@@ -200,10 +311,12 @@ export async function saveDatabase(): Promise<void> {
   const writable = await fileHandle.createWritable();
   await writable.write(blob);
   await writable.close();
+  setSaveState('saved');
 }
 
 export async function downloadDatabase(): Promise<void> {
   if (!db) return;
+  setSaveState('saving');
   const data = db.export();
   let bytes: Uint8Array<ArrayBuffer> | ArrayBuffer;
   if (encryptionKey && encryptionMethod) {
@@ -222,6 +335,7 @@ export async function downloadDatabase(): Promise<void> {
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
+      setSaveState('saved');
       return;
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return;
@@ -239,6 +353,7 @@ export async function downloadDatabase(): Promise<void> {
   a.download = fallbackFileName;
   a.click();
   URL.revokeObjectURL(url);
+  setSaveState('saved');
 }
 
 export async function openDatabaseFromFileInput(file: File): Promise<OpenResult> {
@@ -258,6 +373,7 @@ export async function openDatabaseFromFileInput(file: File): Promise<OpenResult>
   fileHandle = null;
   fallbackFileName = file.name;
   await initializeLoadedDb();
+  setSaveState('saved');
   return { status: 'ok', db, fileName: file.name };
 }
 
