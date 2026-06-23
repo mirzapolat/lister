@@ -13,7 +13,8 @@
     "build:electron": "electron-vite build",
     "package:mac": "electron-vite build && electron-builder --mac",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "tsx server/serve.ts"
   },
   "build": {
     "appId": "com.lister.app",
@@ -58,7 +59,8 @@
     "nodemailer": "^8.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "sql.js": "^1.10.2"
+    "sql.js": "^1.10.2",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -82,7 +84,6 @@
     "eslint-plugin-react-refresh": "^0.4.5",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
   }

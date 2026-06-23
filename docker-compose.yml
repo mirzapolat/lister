@@ -1,0 +1,34 @@
+# lister — single self-hosted container serving the app + SMTP relay.
+# Fronted by an external Traefik instance (TLS + routing managed outside this project).
+# Compose reads the local .env file automatically.
+#
+#   cp .env.example .env   # adjust if needed (all values are optional)
+#   docker compose up --build -d
+
+services:
+  lister:
+    build:
+      context: .
+    image: lister
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Allow self-signed SMTP certs only if your relay needs it (dev/testing).
+      SMTP_REJECT_UNAUTHORIZED: ${SMTP_REJECT_UNAUTHORIZED:-true}
+    expose:
+      - "3000"
+    networks:
+      - home
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.lister.rule: "Host(`lister.mirzapolat.com`)"
+      traefik.http.routers.lister.entrypoints: websecure
+      traefik.http.routers.lister.tls.certresolver: letsencrypt
+      traefik.http.routers.lister.middlewares: secure-headers@file,compress@file
+      traefik.http.services.lister.loadbalancer.server.port: "3000"
+    restart: unless-stopped
+
+# Joins the existing Traefik network (created/managed outside this project).
+networks:
+  home:
+    external: true
